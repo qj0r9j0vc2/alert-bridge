@@ -1,0 +1,52 @@
+# Alert Bridge Configuration
+# Copy this file to config.yaml and update the values
+
+server:
+  port: 8080
+  read_timeout: 5s
+  write_timeout: 10s
+  shutdown_timeout: 30s
+
+slack:
+  enabled: true
+  # Bot User OAuth Token (xoxb-...)
+  bot_token: ${SLACK_BOT_TOKEN}
+  # Signing Secret for verifying requests
+  signing_secret: ${SLACK_SIGNING_SECRET}
+  # Channel ID to send alerts to
+  channel_id: ${SLACK_CHANNEL_ID}
+  # App ID (optional, for verification)
+  app_id: ${SLACK_APP_ID}
+
+pagerduty:
+  enabled: true
+  # REST API Token (for acknowledging incidents)
+  api_token: ${PAGERDUTY_API_TOKEN}
+  # Events API v2 Routing Key (for creating incidents)
+  routing_key: ${PAGERDUTY_ROUTING_KEY}
+  # Service ID to create incidents in
+  service_id: ${PAGERDUTY_SERVICE_ID}
+  # Webhook secret for verifying webhook requests
+  webhook_secret: ${PAGERDUTY_WEBHOOK_SECRET}
+  # Email address for API requests
+  from_email: ${PAGERDUTY_FROM_EMAIL}
+  # Default severity for alerts (critical, error, warning, info)
+  default_severity: warning
+
+alerting:
+  # Time window for deduplicating alerts with same fingerprint
+  deduplication_window: 5m
+  # Interval for resending firing alerts
+  resend_interval: 30m
+  # Available silence durations in Slack dropdown
+  silence_durations:
+    - 15m
+    - 1h
+    - 4h
+    - 24h
+
+logging:
+  # Log level (debug, info, warn, error)
+  level: info
+  # Log format (json, text)
+  format: json
