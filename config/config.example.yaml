@@ -62,16 +62,22 @@ slack:
 
 pagerduty:
   enabled: true
-  # REST API Token (for acknowledging incidents)
-  api_token: ${PAGERDUTY_API_TOKEN}
-  # Events API v2 Routing Key (for creating incidents)
+  # Events API v2 Routing Key - REQUIRED when pagerduty.enabled is true
+  # Used for incident lifecycle: trigger, acknowledge, resolve
   routing_key: ${PAGERDUTY_ROUTING_KEY}
-  # Service ID to create incidents in
+  # REST API Token - OPTIONAL (enables advanced features when configured)
+  # Enables: incident notes, responder requests, health checks
+  # Leave empty to use Events API only (basic incident management)
+  api_token: ${PAGERDUTY_API_TOKEN}
+  # Service ID - OPTIONAL (required for health checks when api_token is set)
+  # Used to validate PagerDuty connectivity on startup
   service_id: ${PAGERDUTY_SERVICE_ID}
+  # From Email - OPTIONAL (used for note attribution when api_token is set)
+  # Notes created via REST API will be attributed to this email
+  # Falls back to default attribution if not configured
+  from_email: ${PAGERDUTY_FROM_EMAIL}
   # Webhook secret for verifying webhook requests
   webhook_secret: ${PAGERDUTY_WEBHOOK_SECRET}
-  # Email address for API requests
-  from_email: ${PAGERDUTY_FROM_EMAIL}
   # Default severity for alerts (critical, error, warning, info)
   default_severity: warning
 

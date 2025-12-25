@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -12,12 +13,13 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Storage   StorageConfig   `yaml:"storage"`
-	Slack     SlackConfig     `yaml:"slack"`
-	PagerDuty PagerDutyConfig `yaml:"pagerduty"`
-	Alerting  AlertingConfig  `yaml:"alerting"`
-	Logging   LoggingConfig   `yaml:"logging"`
+	Server       ServerConfig       `yaml:"server"`
+	Storage      StorageConfig      `yaml:"storage"`
+	Slack        SlackConfig        `yaml:"slack"`
+	PagerDuty    PagerDutyConfig    `yaml:"pagerduty"`
+	Alerting     AlertingConfig     `yaml:"alerting"`
+	Logging      LoggingConfig      `yaml:"logging"`
+	Alertmanager AlertmanagerConfig `yaml:"alertmanager"`
 }
 
 // StorageConfig holds persistence storage settings.
@@ -110,6 +112,12 @@ type LoggingConfig struct {
 	Format string `yaml:"format"`
 }
 
+// AlertmanagerConfig holds Alertmanager webhook settings.
+type AlertmanagerConfig struct {
+	WebhookSecret string   `yaml:"webhook_secret"`
+	AllowedIPs    []string `yaml:"allowed_ips"` // Optional IP whitelist
+}
+
 // Load reads configuration from file and environment.
 func Load(path string) (*Config, error) {
 	cfg := &Config{}
@@ -198,6 +206,11 @@ func (c *Config) overrideFromEnv() {
 	}
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		c.Logging.Format = v
+	}
+
+	// Alertmanager
+	if v := os.Getenv("ALERTMANAGER_WEBHOOK_SECRET"); v != "" {
+		c.Alertmanager.WebhookSecret = v
 	}
 
 	// Storage
@@ -368,9 +381,26 @@ func (c *Config) validate() error {
 	}
 
 	if c.PagerDuty.Enabled {
-		// Either routing key (Events API v2) or API token (REST API) is needed
-		if c.PagerDuty.RoutingKey == "" && c.PagerDuty.APIToken == "" {
-			return fmt.Errorf("pagerduty.routing_key or pagerduty.api_token is required when pagerduty is enabled")
+		// Routing key is REQUIRED for Events API v2 (primary mechanism)
+		if c.PagerDuty.RoutingKey == "" {
+			return fmt.Errorf("pagerduty.routing_key is required when pagerduty is enabled")
+		}
+
+		// API token is OPTIONAL (enables REST API features: notes, responders, health checks)
+		if c.PagerDuty.APIToken == "" {
+			slog.Warn("PagerDuty REST API features disabled: api_token not configured")
+		} else {
+			slog.Info("PagerDuty REST API features enabled", "api_token_configured", true)
+
+			// Service ID is needed for health checks when REST API is enabled
+			if c.PagerDuty.ServiceID == "" {
+				slog.Warn("PagerDuty health checks disabled: service_id not configured when api_token is set")
+			}
+
+			// From email is needed for note attribution when REST API is enabled
+			if c.PagerDuty.FromEmail == "" {
+				slog.Warn("PagerDuty notes will use default attribution: from_email not configured when api_token is set")
+			}
 		}
 	}
 
