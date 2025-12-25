@@ -1,5 +1,55 @@
 # Deployment Guide
 
+## Releases
+
+Alert Bridge uses automated releases via GoReleaser. When a version tag (e.g., `v1.0.0`) is pushed, the CI/CD pipeline automatically:
+
+- Builds binaries for Linux, macOS, and Windows (amd64/arm64)
+- Creates multi-arch Docker images on ghcr.io
+- Generates changelog and release notes
+- Publishes to GitHub Releases
+
+### Creating a Release
+
+```bash
+# Create and push a version tag
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+### Downloading Binaries
+
+Download pre-built binaries from [GitHub Releases](https://github.com/qj0r9j0vc2/alert-bridge/releases):
+
+```bash
+# Linux (amd64)
+curl -LO https://github.com/qj0r9j0vc2/alert-bridge/releases/latest/download/alert-bridge_linux_amd64.tar.gz
+tar xzf alert-bridge_linux_amd64.tar.gz
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/qj0r9j0vc2/alert-bridge/releases/latest/download/alert-bridge_darwin_arm64.tar.gz
+tar xzf alert-bridge_darwin_arm64.tar.gz
+
+# Verify checksum
+sha256sum -c checksums.txt
+```
+
+### Using Docker Images
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/qj0r9j0vc2/alert-bridge:latest
+
+# Pull a specific version
+docker pull ghcr.io/qj0r9j0vc2/alert-bridge:v1.0.0
+
+# Run with config
+docker run -d \
+  -p 8080:8080 \
+  -v $(pwd)/config:/app/config \
+  ghcr.io/qj0r9j0vc2/alert-bridge:latest
+```
+
 ## Docker
 
 ### Build Image
