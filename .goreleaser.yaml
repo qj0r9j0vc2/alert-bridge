@@ -43,7 +43,6 @@ archives:
           - zip
     files:
       - README.md
-      - LICENSE
       - config/config.example.yaml
 
 checksum:

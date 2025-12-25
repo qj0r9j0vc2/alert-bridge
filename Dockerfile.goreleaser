@@ -5,12 +5,16 @@
 FROM alpine:3.19
 
 # Install CA certificates for HTTPS
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
-# Copy the pre-built binary from GoReleaser
-COPY alert-bridge /app/alert-bridge
+# Docker buildx automatically provides these args for multi-platform builds
+ARG TARGETOS
+ARG TARGETARCH
+
+# Copy the pre-built binary from GoReleaser's platform-specific directory
+COPY ${TARGETOS}/${TARGETARCH}/alert-bridge /app/alert-bridge
 
 # Copy config example
 COPY config/config.example.yaml /app/config/config.example.yaml

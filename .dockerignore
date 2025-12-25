@@ -1,0 +1,53 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Documentation
+*.md
+docs/
+specs/
+.specify/
+.claude/
+.auto-claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+*.test
+*.out
+coverage.html
+bin/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+.air.toml
+
+# Configuration (will be mounted or provided via env)
+config/config.yaml
+.env
+*.env.local
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
