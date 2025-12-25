@@ -64,12 +64,14 @@ slack:
 
 pagerduty:
   enabled: true
-  api_token: ${PAGERDUTY_API_TOKEN}
-  routing_key: ${PAGERDUTY_ROUTING_KEY}
-  service_id: ${PAGERDUTY_SERVICE_ID}
+  routing_key: ${PAGERDUTY_ROUTING_KEY}      # REQUIRED - Events API v2
+  api_token: ${PAGERDUTY_API_TOKEN}          # OPTIONAL - REST API features
+  service_id: ${PAGERDUTY_SERVICE_ID}        # OPTIONAL - Health checks
+  from_email: ${PAGERDUTY_FROM_EMAIL}        # OPTIONAL - Note attribution
   webhook_secret: ${PAGERDUTY_WEBHOOK_SECRET}
-  from_email: ${PAGERDUTY_FROM_EMAIL}
 ```
+
+See [PagerDuty Configuration](#pagerduty-configuration) for detailed setup.
 
 ### Running
 
@@ -121,6 +123,103 @@ See [Architecture Documentation](docs/architecture.md) for details.
 | Recommended For | Dev/Test | Single instance | Multi-instance/HA |
 
 See [Storage Documentation](docs/storage.md) for configuration details.
+
+## PagerDuty Configuration
+
+Alert Bridge supports both PagerDuty Events API v2 (for incident lifecycle) and REST API v2 (for advanced features).
+
+### Events API v2 (Required)
+
+The **routing_key** enables core incident management:
+- ✅ Create incidents (trigger)
+- ✅ Acknowledge incidents
+- ✅ Resolve incidents
+- ✅ Exponential backoff retry (100ms → 5s, 3 retries)
+
+**Setup:**
+1. Generate an Events API v2 integration key in PagerDuty
+2. Set `pagerduty.routing_key` in config
+3. Incidents will be created/managed via Events API
+
+### REST API v2 (Optional)
+
+The **api_token** enables advanced features:
+- 📝 **Incident Notes**: Automatically attach Slack ack comments to PagerDuty incidents
+- 🏥 **Health Checks**: Validate PagerDuty connectivity on startup (cached for 5 minutes)
+- 🔄 **Enhanced Logging**: Track response times and API operation success/failure
+
+**Setup:**
+1. Generate a REST API token in PagerDuty (requires appropriate permissions)
+2. Set `pagerduty.api_token` in config
+3. Optionally set `service_id` (for health checks) and `from_email` (for note attribution)
+
+**Configuration Validation:**
+```yaml
+pagerduty:
+  enabled: true
+  routing_key: "xxx"    # ✅ REQUIRED - App fails to start if missing
+  api_token: "yyy"      # ⚠️  OPTIONAL - Warning logged if missing
+  service_id: "zzz"     # ⚠️  OPTIONAL - Warning logged if missing when api_token set
+  from_email: "..."     # ⚠️  OPTIONAL - Warning logged if missing when api_token set
+```
+
+### Retry Logic
+
+All PagerDuty API calls use exponential backoff:
+- **Initial Delay**: 100ms
+- **Multiplier**: 2x
+- **Max Delay**: 5s
+- **Max Retries**: 3 attempts
+- **Total Max Duration**: ~700ms (100ms + 200ms + 400ms)
+
+**Retryable Errors:**
+- HTTP 5xx (server errors)
+- HTTP 429 (rate limit)
+- Network timeouts
+- Connection errors
+
+**Non-Retryable Errors:**
+- HTTP 4xx (client errors like 401, 403, 404)
+- Context cancellation
+
+### Health Checks
+
+When `api_token` and `service_id` are configured, Alert Bridge performs on-demand health checks:
+
+**Startup Check:**
+- Validates PagerDuty connectivity when application starts
+- Logs warning and continues with degraded features if check fails
+- Uses 5-second timeout
+
+**Post-Failure Check:**
+- Triggered automatically after REST API call failures
+- Runs in background to avoid blocking operations
+- Results cached for 5 minutes to prevent excessive API calls
+
+**Cache Behavior:**
+- Health check results cached with 5-minute TTL
+- Subsequent checks within TTL return cached result
+- Fresh check performed after cache expiration
+
+### Webhook Event Coverage
+
+Supported webhook event types:
+- ✅ `incident.acknowledged` - Syncs ack to Slack
+- ✅ `incident.resolved` - Updates alert state
+- ✅ `incident.unacknowledged` - Logged (not synced)
+- ✅ `incident.reassigned` - Logged
+- ✅ `incident.escalated` - Logged
+- ✅ `incident.priority_updated` - Logged
+- ✅ `incident.responder_added` - Logged
+- ✅ `incident.status_update_published` - Logged
+
+### Backward Compatibility
+
+The PagerDuty integration is fully backward compatible:
+- Existing configurations with only `routing_key` continue to work
+- Events API functionality unchanged
+- REST API features gracefully disabled when `api_token` not configured
+- No breaking changes to existing deployments
 
 ## Contributing
 
