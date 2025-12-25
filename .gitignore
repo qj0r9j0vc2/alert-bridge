@@ -48,3 +48,5 @@ dist/
 
 # Test
 /test/data/
+
+test/alert-bridge-config.yaml
