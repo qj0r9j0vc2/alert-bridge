@@ -131,10 +131,10 @@ Alert Bridge supports both PagerDuty Events API v2 (for incident lifecycle) and 
 ### Events API v2 (Required)
 
 The **routing_key** enables core incident management:
-- ✅ Create incidents (trigger)
-- ✅ Acknowledge incidents
-- ✅ Resolve incidents
-- ✅ Exponential backoff retry (100ms → 5s, 3 retries)
+- Create incidents (trigger)
+- Acknowledge incidents
+- Resolve incidents
+- Exponential backoff retry (100ms to 5s, 3 retries)
 
 **Setup:**
 1. Generate an Events API v2 integration key in PagerDuty
@@ -144,9 +144,9 @@ The **routing_key** enables core incident management:
 ### REST API v2 (Optional)
 
 The **api_token** enables advanced features:
-- 📝 **Incident Notes**: Automatically attach Slack ack comments to PagerDuty incidents
-- 🏥 **Health Checks**: Validate PagerDuty connectivity on startup (cached for 5 minutes)
-- 🔄 **Enhanced Logging**: Track response times and API operation success/failure
+- **Incident Notes**: Automatically attach Slack ack comments to PagerDuty incidents
+- **Health Checks**: Validate PagerDuty connectivity on startup (cached for 5 minutes)
+- **Enhanced Logging**: Track response times and API operation success/failure
 
 **Setup:**
 1. Generate a REST API token in PagerDuty (requires appropriate permissions)
@@ -157,10 +157,10 @@ The **api_token** enables advanced features:
 ```yaml
 pagerduty:
   enabled: true
-  routing_key: "xxx"    # ✅ REQUIRED - App fails to start if missing
-  api_token: "yyy"      # ⚠️  OPTIONAL - Warning logged if missing
-  service_id: "zzz"     # ⚠️  OPTIONAL - Warning logged if missing when api_token set
-  from_email: "..."     # ⚠️  OPTIONAL - Warning logged if missing when api_token set
+  routing_key: "xxx"    # REQUIRED - App fails to start if missing
+  api_token: "yyy"      # OPTIONAL - Warning logged if missing
+  service_id: "zzz"     # OPTIONAL - Warning logged if missing when api_token set
+  from_email: "..."     # OPTIONAL - Warning logged if missing when api_token set
 ```
 
 ### Retry Logic
@@ -204,14 +204,14 @@ When `api_token` and `service_id` are configured, Alert Bridge performs on-deman
 ### Webhook Event Coverage
 
 Supported webhook event types:
-- ✅ `incident.acknowledged` - Syncs ack to Slack
-- ✅ `incident.resolved` - Updates alert state
-- ✅ `incident.unacknowledged` - Logged (not synced)
-- ✅ `incident.reassigned` - Logged
-- ✅ `incident.escalated` - Logged
-- ✅ `incident.priority_updated` - Logged
-- ✅ `incident.responder_added` - Logged
-- ✅ `incident.status_update_published` - Logged
+- `incident.acknowledged` - Syncs ack to Slack
+- `incident.resolved` - Updates alert state
+- `incident.unacknowledged` - Logged (not synced)
+- `incident.reassigned` - Logged
+- `incident.escalated` - Logged
+- `incident.priority_updated` - Logged
+- `incident.responder_added` - Logged
+- `incident.status_update_published` - Logged
 
 ### Backward Compatibility
 
