@@ -169,6 +169,12 @@ func main() {
 		notifiers = append(notifiers, pdClient)
 		syncers = append(syncers, pdClient)
 		logger.Info("PagerDuty integration enabled")
+
+		// Run health check on startup if REST API is available
+		if err := pdClient.RunHealthCheck(context.Background()); err != nil {
+			logger.Warn("PagerDuty health check failed (continuing with degraded features)",
+				"error", err)
+		}
 	}
 
 	// Create a slog adapter for use cases
