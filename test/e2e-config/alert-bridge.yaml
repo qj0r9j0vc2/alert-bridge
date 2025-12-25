@@ -1,0 +1,59 @@
+server:
+  port: 8080
+  host: "0.0.0.0"
+  read_timeout: 10s
+  write_timeout: 10s
+  shutdown_timeout: 5s
+
+logging:
+  level: info
+  format: json
+
+alertmanager:
+  webhook_path: /webhook/alertmanager
+
+notifications:
+  slack:
+    enabled: true
+    webhook_url: "http://mock-slack:9091/api/chat.postMessage"
+    channel: "C123456"  # Mock channel ID
+    username: "Alert Bridge E2E"
+    icon_emoji: ":warning:"
+    templates:
+      critical: |
+        🔴 *{{ .Labels.alertname }}*
+        *Severity:* {{ .Labels.severity }}
+        *Instance:* {{ .Labels.instance }}
+        *Summary:* {{ .Annotations.summary }}
+        {{ if .Annotations.description }}*Description:* {{ .Annotations.description }}{{ end }}
+      warning: |
+        🟡 *{{ .Labels.alertname }}*
+        *Severity:* {{ .Labels.severity }}
+        *Instance:* {{ .Labels.instance }}
+        *Summary:* {{ .Annotations.summary }}
+      resolved: |
+        ✅ *RESOLVED: {{ .Labels.alertname }}*
+        *Instance:* {{ .Labels.instance }}
+
+  pagerduty:
+    enabled: true
+    integration_key: "mock-routing-key"
+    api_url: "http://mock-pagerduty:9092/v2/enqueue"
+    severity_map:
+      critical: critical
+      warning: warning
+      info: info
+
+storage:
+  type: memory
+  memory:
+    max_alerts: 1000
+    cleanup_interval: 5m
+
+deduplication:
+  enabled: true
+  window: 5m
+  fingerprint_labels:
+    - alertname
+    - instance
+    - severity
