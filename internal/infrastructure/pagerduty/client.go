@@ -3,7 +3,9 @@ package pagerduty
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
 
@@ -13,30 +15,53 @@ import (
 // Client wraps the PagerDuty API client with domain-specific operations.
 // Implements both alert.Notifier and ack.AckSyncer interfaces.
 type Client struct {
-	eventsClient  *pagerduty.Client
-	routingKey    string
-	serviceID     string
-	fromEmail     string
+	eventsClient    *pagerduty.Client
+	routingKey      string
+	serviceID       string
+	fromEmail       string
 	defaultSeverity string
+	retryPolicy     *RetryPolicy
+	restClient      RESTClient
+	healthChecker   HealthChecker
 }
 
-// NewClient creates a new PagerDuty client.
+// NewClient creates a new PagerDuty client with retry policy and optional REST API features.
 func NewClient(apiToken, routingKey, serviceID, fromEmail, defaultSeverity string) *Client {
-	var client *pagerduty.Client
+	var eventsClient *pagerduty.Client
 	if apiToken != "" {
-		client = pagerduty.NewClient(apiToken)
+		eventsClient = pagerduty.NewClient(apiToken)
 	}
 
 	if defaultSeverity == "" {
 		defaultSeverity = "warning"
 	}
 
+	// Initialize retry policy with exponential backoff
+	retryPolicy := DefaultRetryPolicy()
+
+	// Initialize REST API client if api_token is provided
+	var restClient RESTClient
+	if apiToken != "" {
+		restClient = NewRESTClient(apiToken, fromEmail, retryPolicy)
+		slog.Info("PagerDuty REST API client initialized", "from_email", fromEmail)
+	}
+
+	// Initialize health checker if both api_token and service_id are provided
+	var healthChecker HealthChecker
+	if apiToken != "" && serviceID != "" {
+		healthChecker = NewHealthChecker(restClient, serviceID)
+		slog.Info("PagerDuty health checker initialized", "service_id", serviceID)
+	}
+
 	return &Client{
-		eventsClient:    client,
+		eventsClient:    eventsClient,
 		routingKey:      routingKey,
 		serviceID:       serviceID,
 		fromEmail:       fromEmail,
 		defaultSeverity: defaultSeverity,
+		retryPolicy:     retryPolicy,
+		restClient:      restClient,
+		healthChecker:   healthChecker,
 	}
 }
 
@@ -69,11 +94,34 @@ func (c *Client) Notify(ctx context.Context, alert *entity.Alert) (string, error
 		event.Payload.Details = make(map[string]interface{})
 	}
 
-	// Send the event
-	resp, err := pagerduty.ManageEventWithContext(ctx, *event)
+	// Send the event with retry logic
+	var resp *pagerduty.V2EventResponse
+	startTime := time.Now()
+
+	err := c.retryPolicy.WithRetry(ctx, func(ctx context.Context) error {
+		var retryErr error
+		resp, retryErr = pagerduty.ManageEventWithContext(ctx, *event)
+		return retryErr
+	})
+
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		slog.Error("Failed to send PagerDuty event after retries",
+			"alert_id", alert.ID,
+			"alert_name", alert.Name,
+			"action", "trigger",
+			"response_time", responseTime,
+			"error", err)
 		return "", fmt.Errorf("sending pagerduty event: %w", err)
 	}
+
+	slog.Info("PagerDuty event sent successfully",
+		"alert_id", alert.ID,
+		"alert_name", alert.Name,
+		"action", "trigger",
+		"dedup_key", resp.DedupKey,
+		"response_time", responseTime)
 
 	// Return dedup key as the incident identifier
 	return resp.DedupKey, nil
@@ -122,7 +170,7 @@ func (c *Client) Acknowledge(ctx context.Context, alert *entity.Alert, ackEvent 
 		return fmt.Errorf("pagerduty routing key not configured")
 	}
 
-	dedupKey := alert.PagerDutyIncidentID
+	dedupKey := alert.GetExternalReference("pagerduty")
 	if dedupKey == "" {
 		dedupKey = c.buildDedupKey(alert)
 	}
@@ -133,10 +181,31 @@ func (c *Client) Acknowledge(ctx context.Context, alert *entity.Alert, ackEvent 
 		DedupKey:   dedupKey,
 	}
 
-	_, err := pagerduty.ManageEventWithContext(ctx, *event)
+	// Acknowledge with retry logic
+	startTime := time.Now()
+
+	err := c.retryPolicy.WithRetry(ctx, func(ctx context.Context) error {
+		_, retryErr := pagerduty.ManageEventWithContext(ctx, *event)
+		return retryErr
+	})
+
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		slog.Error("Failed to acknowledge PagerDuty event after retries",
+			"alert_id", alert.ID,
+			"alert_name", alert.Name,
+			"dedup_key", dedupKey,
+			"response_time", responseTime,
+			"error", err)
 		return fmt.Errorf("acknowledging pagerduty event: %w", err)
 	}
+
+	slog.Info("PagerDuty event acknowledged successfully",
+		"alert_id", alert.ID,
+		"alert_name", alert.Name,
+		"dedup_key", dedupKey,
+		"response_time", responseTime)
 
 	return nil
 }
@@ -147,7 +216,7 @@ func (c *Client) Resolve(ctx context.Context, alert *entity.Alert) error {
 		return fmt.Errorf("pagerduty routing key not configured")
 	}
 
-	dedupKey := alert.PagerDutyIncidentID
+	dedupKey := alert.GetExternalReference("pagerduty")
 	if dedupKey == "" {
 		dedupKey = c.buildDedupKey(alert)
 	}
@@ -158,10 +227,31 @@ func (c *Client) Resolve(ctx context.Context, alert *entity.Alert) error {
 		DedupKey:   dedupKey,
 	}
 
-	_, err := pagerduty.ManageEventWithContext(ctx, *event)
+	// Resolve with retry logic
+	startTime := time.Now()
+
+	err := c.retryPolicy.WithRetry(ctx, func(ctx context.Context) error {
+		_, retryErr := pagerduty.ManageEventWithContext(ctx, *event)
+		return retryErr
+	})
+
+	responseTime := time.Since(startTime)
+
 	if err != nil {
+		slog.Error("Failed to resolve PagerDuty event after retries",
+			"alert_id", alert.ID,
+			"alert_name", alert.Name,
+			"dedup_key", dedupKey,
+			"response_time", responseTime,
+			"error", err)
 		return fmt.Errorf("resolving pagerduty event: %w", err)
 	}
+
+	slog.Info("PagerDuty event resolved successfully",
+		"alert_id", alert.ID,
+		"alert_name", alert.Name,
+		"dedup_key", dedupKey,
+		"response_time", responseTime)
 
 	return nil
 }
