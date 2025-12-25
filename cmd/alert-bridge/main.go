@@ -8,9 +8,12 @@ import (
 	"syscall"
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/repository"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/config"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/pagerduty"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/persistence/memory"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/persistence/mysql"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/persistence/sqlite"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/server"
 	infraslack "github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/slack"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/usecase/ack"
@@ -38,13 +41,75 @@ func main() {
 	logger.Info("configuration loaded",
 		"slack_enabled", cfg.IsSlackEnabled(),
 		"pagerduty_enabled", cfg.IsPagerDutyEnabled(),
+		"storage_type", cfg.Storage.Type,
 		"server_port", cfg.Server.Port,
 	)
 
-	// Initialize repositories (in-memory for MVP)
-	alertRepo := memory.NewAlertRepository()
-	ackEventRepo := memory.NewAckEventRepository()
-	silenceRepo := memory.NewSilenceRepository()
+	// Initialize repositories based on storage type
+	var alertRepo repository.AlertRepository
+	var ackEventRepo repository.AckEventRepository
+	var silenceRepo repository.SilenceRepository
+	var sqliteDB *sqlite.DB
+	var mysqlDB *mysql.DB
+
+	switch cfg.Storage.Type {
+	case "mysql":
+		// Initialize MySQL database
+		repos, db, err := mysql.NewRepositories(&cfg.Storage.MySQL)
+		if err != nil {
+			logger.Error("failed to initialize MySQL database", "error", err)
+			os.Exit(1)
+		}
+		mysqlDB = db
+
+		// Assign repositories
+		alertRepo = repos.Alert
+		ackEventRepo = repos.AckEvent
+		silenceRepo = repos.Silence
+
+		logger.Info("MySQL storage initialized",
+			"host", cfg.Storage.MySQL.Primary.Host,
+			"database", cfg.Storage.MySQL.Primary.Database,
+			"pool_max_open", cfg.Storage.MySQL.Pool.MaxOpenConns,
+			"pool_max_idle", cfg.Storage.MySQL.Pool.MaxIdleConns,
+		)
+
+	case "sqlite":
+		// Initialize SQLite database
+		var err error
+		sqliteDB, err = sqlite.NewDB(cfg.Storage.SQLite.Path)
+		if err != nil {
+			logger.Error("failed to initialize SQLite database", "error", err, "path", cfg.Storage.SQLite.Path)
+			os.Exit(1)
+		}
+
+		// Run migrations
+		if err := sqliteDB.Migrate(context.Background()); err != nil {
+			logger.Error("failed to run database migrations", "error", err)
+			sqliteDB.Close()
+			os.Exit(1)
+		}
+
+		// Create repositories
+		repos := sqlite.NewRepositories(sqliteDB.DB)
+		alertRepo = repos.Alert
+		ackEventRepo = repos.AckEvent
+		silenceRepo = repos.Silence
+
+		logger.Info("SQLite storage initialized", "path", cfg.Storage.SQLite.Path)
+
+	case "memory", "":
+		// Use in-memory repositories (default)
+		alertRepo = memory.NewAlertRepository()
+		ackEventRepo = memory.NewAckEventRepository()
+		silenceRepo = memory.NewSilenceRepository()
+
+		logger.Info("in-memory storage initialized")
+
+	default:
+		logger.Error("unknown storage type", "type", cfg.Storage.Type)
+		os.Exit(1)
+	}
 
 	// Initialize infrastructure clients
 	var notifiers []alert.Notifier
@@ -142,6 +207,24 @@ func main() {
 	if err := srv.Run(ctx); err != nil {
 		logger.Error("server error", "error", err)
 		os.Exit(1)
+	}
+
+	// Close MySQL database if it was initialized
+	if mysqlDB != nil {
+		if err := mysqlDB.Close(); err != nil {
+			logger.Error("failed to close MySQL database", "error", err)
+		} else {
+			logger.Info("MySQL database closed successfully")
+		}
+	}
+
+	// Close SQLite database if it was initialized
+	if sqliteDB != nil {
+		if err := sqliteDB.Close(); err != nil {
+			logger.Error("failed to close SQLite database", "error", err)
+		} else {
+			logger.Info("SQLite database closed successfully")
+		}
 	}
 
 	logger.Info("alert-bridge stopped")

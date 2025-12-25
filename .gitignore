@@ -39,3 +39,6 @@ logs/
 # Temporary files
 tmp/
 .air.toml
+
+# Auto Claude data directory
+.auto-claude/

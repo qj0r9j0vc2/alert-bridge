@@ -7,6 +7,48 @@ server:
   write_timeout: 10s
   shutdown_timeout: 30s
 
+# Storage configuration
+# Use "memory" for in-memory storage (data lost on restart)
+# Use "sqlite" for persistent storage (data survives restarts)
+# Use "mysql" for production multi-instance deployments (shared state)
+storage:
+  type: memory  # Options: memory, sqlite, mysql
+
+  sqlite:
+    # Database file path
+    # Use ":memory:" for in-memory SQLite (still loses data on restart)
+    path: ./data/alert-bridge.db
+
+  mysql:
+    # Primary database instance (required for mysql storage type)
+    primary:
+      host: ${MYSQL_HOST}           # Database host (e.g., localhost, mysql.example.com)
+      port: 3306                      # Database port (default: 3306)
+      database: ${MYSQL_DATABASE}     # Database name
+      username: ${MYSQL_USERNAME}     # Database user
+      password: ${MYSQL_PASSWORD}     # Database password
+
+    # Replica database (optional, for read scaling)
+    replica:
+      enabled: false                  # Enable replica for read operations
+      host: ${MYSQL_REPLICA_HOST}
+      port: 3306
+      database: ${MYSQL_REPLICA_DATABASE}
+      username: ${MYSQL_REPLICA_USERNAME}
+      password: ${MYSQL_REPLICA_PASSWORD}
+
+    # Connection pool settings (tuned for multi-instance deployments)
+    pool:
+      max_open_conns: 25              # Maximum open connections per instance
+      max_idle_conns: 5               # Maximum idle connections
+      conn_max_lifetime: 3m           # Connection reuse time limit
+      conn_max_idle_time: 1m          # Idle connection timeout
+
+    # Additional MySQL settings
+    timeout: 5s                       # Query timeout
+    parse_time: true                  # Parse TIME/DATETIME to time.Time (required)
+    charset: utf8mb4                  # Character set (utf8mb4 for emoji support)
+
 slack:
   enabled: true
   # Bot User OAuth Token (xoxb-...)

@@ -13,10 +13,60 @@ import (
 // Config holds all application configuration.
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
+	Storage   StorageConfig   `yaml:"storage"`
 	Slack     SlackConfig     `yaml:"slack"`
 	PagerDuty PagerDutyConfig `yaml:"pagerduty"`
 	Alerting  AlertingConfig  `yaml:"alerting"`
 	Logging   LoggingConfig   `yaml:"logging"`
+}
+
+// StorageConfig holds persistence storage settings.
+type StorageConfig struct {
+	Type   string       `yaml:"type"` // "memory", "sqlite", or "mysql"
+	SQLite SQLiteConfig `yaml:"sqlite"`
+	MySQL  MySQLConfig  `yaml:"mysql"`
+}
+
+// SQLiteConfig holds SQLite-specific settings.
+type SQLiteConfig struct {
+	Path string `yaml:"path"` // Database file path, use ":memory:" for in-memory
+}
+
+// MySQLConfig holds MySQL-specific settings.
+type MySQLConfig struct {
+	Primary MySQLInstanceConfig `yaml:"primary"`
+	Replica MySQLReplicaConfig  `yaml:"replica"`
+	Pool    MySQLPoolConfig     `yaml:"pool"`
+	Timeout time.Duration       `yaml:"timeout"`
+	ParseTime bool              `yaml:"parse_time"`
+	Charset string              `yaml:"charset"`
+}
+
+// MySQLInstanceConfig holds MySQL instance connection settings.
+type MySQLInstanceConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Database string `yaml:"database"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+// MySQLReplicaConfig holds MySQL replica settings.
+type MySQLReplicaConfig struct {
+	Enabled bool                `yaml:"enabled"`
+	Host    string              `yaml:"host"`
+	Port    int                 `yaml:"port"`
+	Database string             `yaml:"database"`
+	Username string             `yaml:"username"`
+	Password string             `yaml:"password"`
+}
+
+// MySQLPoolConfig holds MySQL connection pool settings.
+type MySQLPoolConfig struct {
+	MaxOpenConns    int           `yaml:"max_open_conns"`
+	MaxIdleConns    int           `yaml:"max_idle_conns"`
+	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
+	ConnMaxIdleTime time.Duration `yaml:"conn_max_idle_time"`
 }
 
 // ServerConfig holds HTTP server settings.
@@ -149,6 +199,75 @@ func (c *Config) overrideFromEnv() {
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		c.Logging.Format = v
 	}
+
+	// Storage
+	if v := os.Getenv("STORAGE_TYPE"); v != "" {
+		c.Storage.Type = v
+	}
+	if v := os.Getenv("SQLITE_DATABASE_PATH"); v != "" {
+		c.Storage.SQLite.Path = v
+	}
+
+	// MySQL
+	if v := os.Getenv("MYSQL_HOST"); v != "" {
+		c.Storage.MySQL.Primary.Host = v
+	}
+	if v := os.Getenv("MYSQL_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Storage.MySQL.Primary.Port = port
+		}
+	}
+	if v := os.Getenv("MYSQL_DATABASE"); v != "" {
+		c.Storage.MySQL.Primary.Database = v
+	}
+	if v := os.Getenv("MYSQL_USERNAME"); v != "" {
+		c.Storage.MySQL.Primary.Username = v
+	}
+	if v := os.Getenv("MYSQL_PASSWORD"); v != "" {
+		c.Storage.MySQL.Primary.Password = v
+	}
+	if v := os.Getenv("MYSQL_MAX_OPEN_CONNS"); v != "" {
+		if conns, err := strconv.Atoi(v); err == nil {
+			c.Storage.MySQL.Pool.MaxOpenConns = conns
+		}
+	}
+	if v := os.Getenv("MYSQL_MAX_IDLE_CONNS"); v != "" {
+		if conns, err := strconv.Atoi(v); err == nil {
+			c.Storage.MySQL.Pool.MaxIdleConns = conns
+		}
+	}
+	if v := os.Getenv("MYSQL_CONN_MAX_LIFETIME"); v != "" {
+		if duration, err := time.ParseDuration(v); err == nil {
+			c.Storage.MySQL.Pool.ConnMaxLifetime = duration
+		}
+	}
+	if v := os.Getenv("MYSQL_CONN_MAX_IDLE_TIME"); v != "" {
+		if duration, err := time.ParseDuration(v); err == nil {
+			c.Storage.MySQL.Pool.ConnMaxIdleTime = duration
+		}
+	}
+
+	// MySQL Replica (optional)
+	if v := os.Getenv("MYSQL_REPLICA_ENABLED"); v != "" {
+		c.Storage.MySQL.Replica.Enabled = strings.ToLower(v) == "true"
+	}
+	if v := os.Getenv("MYSQL_REPLICA_HOST"); v != "" {
+		c.Storage.MySQL.Replica.Host = v
+	}
+	if v := os.Getenv("MYSQL_REPLICA_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Storage.MySQL.Replica.Port = port
+		}
+	}
+	if v := os.Getenv("MYSQL_REPLICA_DATABASE"); v != "" {
+		c.Storage.MySQL.Replica.Database = v
+	}
+	if v := os.Getenv("MYSQL_REPLICA_USERNAME"); v != "" {
+		c.Storage.MySQL.Replica.Username = v
+	}
+	if v := os.Getenv("MYSQL_REPLICA_PASSWORD"); v != "" {
+		c.Storage.MySQL.Replica.Password = v
+	}
 }
 
 // applyDefaults sets default values for unset config options.
@@ -195,6 +314,43 @@ func (c *Config) applyDefaults() {
 	if c.Logging.Format == "" {
 		c.Logging.Format = "json"
 	}
+
+	// Storage defaults
+	if c.Storage.Type == "" {
+		c.Storage.Type = "memory"
+	}
+	if c.Storage.SQLite.Path == "" {
+		c.Storage.SQLite.Path = "./data/alert-bridge.db"
+	}
+
+	// MySQL defaults (from research.md)
+	if c.Storage.MySQL.Pool.MaxOpenConns == 0 {
+		c.Storage.MySQL.Pool.MaxOpenConns = 25
+	}
+	if c.Storage.MySQL.Pool.MaxIdleConns == 0 {
+		c.Storage.MySQL.Pool.MaxIdleConns = 5
+	}
+	if c.Storage.MySQL.Pool.ConnMaxLifetime == 0 {
+		c.Storage.MySQL.Pool.ConnMaxLifetime = 3 * time.Minute
+	}
+	if c.Storage.MySQL.Pool.ConnMaxIdleTime == 0 {
+		c.Storage.MySQL.Pool.ConnMaxIdleTime = 1 * time.Minute
+	}
+	if c.Storage.MySQL.Timeout == 0 {
+		c.Storage.MySQL.Timeout = 5 * time.Second
+	}
+	if !c.Storage.MySQL.ParseTime {
+		c.Storage.MySQL.ParseTime = true
+	}
+	if c.Storage.MySQL.Charset == "" {
+		c.Storage.MySQL.Charset = "utf8mb4"
+	}
+	if c.Storage.MySQL.Primary.Port == 0 {
+		c.Storage.MySQL.Primary.Port = 3306
+	}
+	if c.Storage.MySQL.Replica.Port == 0 {
+		c.Storage.MySQL.Replica.Port = 3306
+	}
 }
 
 // validate checks that required configuration is present.
@@ -228,6 +384,49 @@ func (c *Config) validate() error {
 	validFormats := map[string]bool{"json": true, "text": true}
 	if !validFormats[strings.ToLower(c.Logging.Format)] {
 		return fmt.Errorf("invalid log format: %s (must be json or text)", c.Logging.Format)
+	}
+
+	// Validate storage type
+	validStorageTypes := map[string]bool{"memory": true, "sqlite": true, "mysql": true}
+	if !validStorageTypes[strings.ToLower(c.Storage.Type)] {
+		return fmt.Errorf("invalid storage type: %s (must be memory, sqlite, or mysql)", c.Storage.Type)
+	}
+
+	// Validate SQLite path if storage type is sqlite
+	if strings.ToLower(c.Storage.Type) == "sqlite" && c.Storage.SQLite.Path == "" {
+		return fmt.Errorf("storage.sqlite.path is required when storage type is sqlite")
+	}
+
+	// Validate MySQL config if storage type is mysql
+	if strings.ToLower(c.Storage.Type) == "mysql" {
+		if c.Storage.MySQL.Primary.Host == "" {
+			return fmt.Errorf("storage.mysql.primary.host is required when storage type is mysql")
+		}
+		if c.Storage.MySQL.Primary.Database == "" {
+			return fmt.Errorf("storage.mysql.primary.database is required when storage type is mysql")
+		}
+		if c.Storage.MySQL.Primary.Username == "" {
+			return fmt.Errorf("storage.mysql.primary.username is required when storage type is mysql")
+		}
+		if c.Storage.MySQL.Primary.Password == "" {
+			return fmt.Errorf("storage.mysql.primary.password is required when storage type is mysql")
+		}
+
+		// Validate replica config if enabled
+		if c.Storage.MySQL.Replica.Enabled {
+			if c.Storage.MySQL.Replica.Host == "" {
+				return fmt.Errorf("storage.mysql.replica.host is required when replica is enabled")
+			}
+			if c.Storage.MySQL.Replica.Database == "" {
+				return fmt.Errorf("storage.mysql.replica.database is required when replica is enabled")
+			}
+			if c.Storage.MySQL.Replica.Username == "" {
+				return fmt.Errorf("storage.mysql.replica.username is required when replica is enabled")
+			}
+			if c.Storage.MySQL.Replica.Password == "" {
+				return fmt.Errorf("storage.mysql.replica.password is required when replica is enabled")
+			}
+		}
 	}
 
 	return nil
