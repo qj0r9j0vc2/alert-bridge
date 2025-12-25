@@ -119,10 +119,16 @@ type HandlePagerDutyWebhookOutput struct {
 // IsSupportedEventType checks if the event type should be processed.
 func IsSupportedEventType(eventType string) bool {
 	supportedTypes := map[string]bool{
-		"incident.acknowledged": true,
-		"incident.resolved":     true,
+		// Existing event types
+		"incident.acknowledged":   true,
+		"incident.resolved":       true,
 		"incident.unacknowledged": true,
-		"incident.reassigned":   true,
+		"incident.reassigned":     true,
+		// New event types (Phase 6: US4)
+		"incident.escalated":               true,
+		"incident.priority_updated":        true,
+		"incident.responder_added":         true,
+		"incident.status_update_published": true,
 	}
 	return supportedTypes[eventType]
 }

@@ -79,6 +79,18 @@ func (uc *HandleWebhookUseCase) Execute(ctx context.Context, input dto.HandlePag
 		output.Message = "unacknowledged event noted"
 		return output, nil
 
+	case "incident.escalated":
+		return uc.handleEscalated(ctx, alertEntity, input, output)
+
+	case "incident.priority_updated":
+		return uc.handlePriorityUpdated(ctx, alertEntity, input, output)
+
+	case "incident.responder_added":
+		return uc.handleResponderAdded(ctx, alertEntity, input, output)
+
+	case "incident.status_update_published":
+		return uc.handleStatusUpdatePublished(ctx, alertEntity, input, output)
+
 	default:
 		uc.logger.Debug("ignoring PagerDuty event type",
 			"eventType", input.EventType,
@@ -179,6 +191,86 @@ func (uc *HandleWebhookUseCase) handleResolved(
 
 	output.Processed = true
 	output.Message = "resolved"
+	return output, nil
+}
+
+// handleEscalated processes an incident.escalated event.
+func (uc *HandleWebhookUseCase) handleEscalated(
+	ctx context.Context,
+	alertEntity *entity.Alert,
+	input dto.HandlePagerDutyWebhookInput,
+	output *dto.HandlePagerDutyWebhookOutput,
+) (*dto.HandlePagerDutyWebhookOutput, error) {
+	uc.logger.Info("incident escalated",
+		"alertID", alertEntity.ID,
+		"incidentID", input.IncidentID,
+		"alertName", alertEntity.Name,
+		"user", input.UserEmail,
+	)
+
+	output.Processed = true
+	output.Message = "escalation noted"
+	return output, nil
+}
+
+// handlePriorityUpdated processes an incident.priority_updated event.
+func (uc *HandleWebhookUseCase) handlePriorityUpdated(
+	ctx context.Context,
+	alertEntity *entity.Alert,
+	input dto.HandlePagerDutyWebhookInput,
+	output *dto.HandlePagerDutyWebhookOutput,
+) (*dto.HandlePagerDutyWebhookOutput, error) {
+	uc.logger.Info("incident priority updated",
+		"alertID", alertEntity.ID,
+		"incidentID", input.IncidentID,
+		"alertName", alertEntity.Name,
+		"currentSeverity", alertEntity.Severity,
+	)
+
+	// Note: Priority update could potentially map to severity change,
+	// but this requires additional webhook data (old/new priority).
+	// For now, we just log the event.
+
+	output.Processed = true
+	output.Message = "priority update noted"
+	return output, nil
+}
+
+// handleResponderAdded processes an incident.responder_added event.
+func (uc *HandleWebhookUseCase) handleResponderAdded(
+	ctx context.Context,
+	alertEntity *entity.Alert,
+	input dto.HandlePagerDutyWebhookInput,
+	output *dto.HandlePagerDutyWebhookOutput,
+) (*dto.HandlePagerDutyWebhookOutput, error) {
+	uc.logger.Info("responder added to incident",
+		"alertID", alertEntity.ID,
+		"incidentID", input.IncidentID,
+		"alertName", alertEntity.Name,
+		"user", input.UserEmail,
+	)
+
+	output.Processed = true
+	output.Message = "responder addition noted"
+	return output, nil
+}
+
+// handleStatusUpdatePublished processes an incident.status_update_published event.
+func (uc *HandleWebhookUseCase) handleStatusUpdatePublished(
+	ctx context.Context,
+	alertEntity *entity.Alert,
+	input dto.HandlePagerDutyWebhookInput,
+	output *dto.HandlePagerDutyWebhookOutput,
+) (*dto.HandlePagerDutyWebhookOutput, error) {
+	uc.logger.Info("status update published",
+		"alertID", alertEntity.ID,
+		"incidentID", input.IncidentID,
+		"alertName", alertEntity.Name,
+		"user", input.UserEmail,
+	)
+
+	output.Processed = true
+	output.Message = "status update noted"
 	return output, nil
 }
 
