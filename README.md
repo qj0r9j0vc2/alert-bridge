@@ -4,12 +4,12 @@ A unified alert management system that bridges Alertmanager with Slack and Pager
 
 ## Features
 
-- 🔔 **Alert Processing**: Receive and process alerts from Alertmanager webhooks
-- 🔄 **Bidirectional Sync**: Synchronize acknowledgments between Slack and PagerDuty
-- 💾 **Persistent Storage**: SQLite and MySQL-based persistence for alerts, ack events, and silence rules
-- 🔇 **Silence Management**: Create and manage alert silences across platforms
-- 📊 **Audit Trail**: Complete history of all acknowledgment events
-- ⚡ **High Performance**: Sub-millisecond read/write operations
+- **Alert Processing**: Receive and process alerts from Alertmanager webhooks
+- **Bidirectional Sync**: Synchronize acknowledgments between Slack and PagerDuty
+- **Persistent Storage**: SQLite and MySQL-based persistence for alerts, ack events, and silence rules
+- **Silence Management**: Create and manage alert silences across platforms
+- **Audit Trail**: Complete history of all acknowledgment events
+- **High Performance**: Sub-millisecond read/write operations
 
 ## Quick Start
 

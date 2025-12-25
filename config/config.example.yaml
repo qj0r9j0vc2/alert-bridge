@@ -47,7 +47,7 @@ storage:
     # Additional MySQL settings
     timeout: 5s                       # Query timeout
     parse_time: true                  # Parse TIME/DATETIME to time.Time (required)
-    charset: utf8mb4                  # Character set (utf8mb4 for emoji support)
+    charset: utf8mb4                  # Character set (utf8mb4 recommended)
 
 slack:
   enabled: true

@@ -26,19 +26,19 @@ func TestQuickstartValidation(t *testing.T) {
 		require.NoError(t, err, "Failed to initialize SQLite database")
 		defer db.Close()
 
-		t.Log("✅ SQLite database initialized")
+		t.Log("SQLite database initialized")
 
 		// Run migrations
 		err = db.Migrate(context.Background())
 		require.NoError(t, err, "Failed to run migrations")
 
-		t.Log("✅ Database migrations completed")
+		t.Log("Database migrations completed")
 
 		// Verify database file exists
 		_, err = os.Stat(dbPath)
 		require.NoError(t, err, "Database file should exist")
 
-		t.Log("✅ Database file created")
+		t.Log("Database file created")
 	})
 
 	t.Run("Step 2: Create repositories and save data", func(t *testing.T) {
@@ -48,7 +48,7 @@ func TestQuickstartValidation(t *testing.T) {
 
 		// Create repositories
 		repos := sqlite.NewRepositories(db.DB)
-		t.Log("✅ Repositories created")
+		t.Log("Repositories created")
 
 		// Test Alert Repository
 		alert := &entity.Alert{
@@ -68,7 +68,7 @@ func TestQuickstartValidation(t *testing.T) {
 		err = repos.Alert.Save(context.Background(), alert)
 		require.NoError(t, err, "Failed to save alert")
 
-		t.Log("✅ Alert saved successfully")
+		t.Log("Alert saved successfully")
 
 		// Retrieve and verify
 		retrieved, err := repos.Alert.FindByID(context.Background(), "quickstart-alert")
@@ -78,7 +78,7 @@ func TestQuickstartValidation(t *testing.T) {
 		assert.Equal(t, "fp-quickstart", retrieved.Fingerprint)
 		assert.Equal(t, "test", retrieved.Labels["env"])
 
-		t.Log("✅ Alert retrieved and verified")
+		t.Log("Alert retrieved and verified")
 
 		// Test AckEvent Repository
 		ackEvent := &entity.AckEvent{
@@ -95,7 +95,7 @@ func TestQuickstartValidation(t *testing.T) {
 		err = repos.AckEvent.Save(context.Background(), ackEvent)
 		require.NoError(t, err, "Failed to save ack event")
 
-		t.Log("✅ Ack event saved successfully")
+		t.Log("Ack event saved successfully")
 
 		// Test Silence Repository
 		silence := &entity.SilenceMark{
@@ -114,7 +114,7 @@ func TestQuickstartValidation(t *testing.T) {
 		err = repos.Silence.Save(context.Background(), silence)
 		require.NoError(t, err, "Failed to save silence")
 
-		t.Log("✅ Silence saved successfully")
+		t.Log("Silence saved successfully")
 	})
 
 	t.Run("Step 3: Verify persistence across restart", func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestQuickstartValidation(t *testing.T) {
 		require.NotNil(t, alert)
 		assert.Equal(t, "Quickstart Test Alert", alert.Name)
 
-		t.Log("✅ Alert persisted across restart")
+		t.Log("Alert persisted across restart")
 
 		// Verify ack event persisted
 		ackEvent, err := repos.AckEvent.FindByID(context.Background(), "quickstart-ack")
@@ -139,7 +139,7 @@ func TestQuickstartValidation(t *testing.T) {
 		require.NotNil(t, ackEvent)
 		assert.Equal(t, "Investigating the issue", ackEvent.Note)
 
-		t.Log("✅ Ack event persisted across restart")
+		t.Log("Ack event persisted across restart")
 
 		// Verify silence persisted
 		silence, err := repos.Silence.FindByID(context.Background(), "quickstart-silence")
@@ -147,7 +147,7 @@ func TestQuickstartValidation(t *testing.T) {
 		require.NotNil(t, silence)
 		assert.Equal(t, "Maintenance window", silence.Reason)
 
-		t.Log("✅ Silence persisted across restart")
+		t.Log("Silence persisted across restart")
 	})
 
 	t.Run("Step 4: Verify configuration loading", func(t *testing.T) {
@@ -169,8 +169,8 @@ func TestQuickstartValidation(t *testing.T) {
 		assert.Equal(t, "sqlite", cfg.Storage.Type)
 		assert.Equal(t, "./data/alert-bridge.db", cfg.Storage.SQLite.Path)
 
-		t.Log("✅ Configuration structure validated")
+		t.Log("Configuration structure validated")
 	})
 
-	t.Log("\n🎉 All quickstart validation steps passed!")
+	t.Log("All quickstart validation steps passed!")
 }
