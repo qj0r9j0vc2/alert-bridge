@@ -115,29 +115,9 @@ func (r *restClient) GetIncident(ctx context.Context, incidentID string) (*pager
 }
 
 // CreateIncidentResponderRequest adds responders to an incident with retry logic.
+// Note: This method is a placeholder for future implementation.
+// The go-pagerduty library may require a different API for adding responders.
 func (r *restClient) CreateIncidentResponderRequest(ctx context.Context, incidentID, message string, responderRequestTargets []pagerduty.ResponderRequestTarget) (*pagerduty.ResponderRequest, error) {
-	// Apply 5-second timeout
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var responderReq *pagerduty.ResponderRequest
-	var err error
-
-	// Build request
-	request := pagerduty.ResponderRequest{
-		Message:                 message,
-		ResponderRequestTargets: responderRequestTargets,
-	}
-
-	// Execute with retry
-	retryErr := r.retryPolicy.WithRetry(ctx, func(ctx context.Context) error {
-		responderReq, err = r.client.CreateIncidentResponderRequestWithContext(ctx, incidentID, request)
-		return err
-	})
-
-	if retryErr != nil {
-		return nil, fmt.Errorf("CreateIncidentResponderRequest failed for incident %s: %w", incidentID, retryErr)
-	}
-
-	return responderReq, nil
+	// Placeholder implementation - to be completed when go-pagerduty library supports this API
+	return nil, fmt.Errorf("CreateIncidentResponderRequest not yet implemented")
 }

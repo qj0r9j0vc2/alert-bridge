@@ -170,7 +170,7 @@ func (c *Client) Acknowledge(ctx context.Context, alert *entity.Alert, ackEvent 
 		return fmt.Errorf("pagerduty routing key not configured")
 	}
 
-	dedupKey := alert.GetExternalReference("pagerduty")
+	dedupKey := alert.PagerDutyIncidentID
 	if dedupKey == "" {
 		dedupKey = c.buildDedupKey(alert)
 	}
@@ -207,7 +207,47 @@ func (c *Client) Acknowledge(ctx context.Context, alert *entity.Alert, ackEvent 
 		"dedup_key", dedupKey,
 		"response_time", responseTime)
 
+	// Add incident note if REST API is available and note exists
+	if c.restClient != nil && ackEvent.Note != "" {
+		c.createIncidentNote(ctx, dedupKey, alert, ackEvent)
+	}
+
 	return nil
+}
+
+// createIncidentNote creates an incident note via REST API (non-blocking).
+// Errors are logged but do not fail the acknowledge operation.
+func (c *Client) createIncidentNote(ctx context.Context, incidentID string, alert *entity.Alert, ackEvent *entity.AckEvent) {
+	noteContent := formatIncidentNote(alert, ackEvent, c.fromEmail)
+	noteStartTime := time.Now()
+
+	note, err := c.restClient.CreateIncidentNote(ctx, incidentID, noteContent)
+	noteResponseTime := time.Since(noteStartTime)
+
+	if err != nil {
+		slog.Warn("Failed to create incident note (ack still succeeded)",
+			"alert_id", alert.ID,
+			"incident_id", incidentID,
+			"response_time", noteResponseTime,
+			"error", err)
+
+		// Trigger health check after REST API failure
+		if c.healthChecker != nil {
+			go func() {
+				if healthErr := c.RunHealthCheck(context.Background()); healthErr != nil {
+					slog.Debug("Post-failure health check completed", "healthy", false)
+				}
+			}()
+		}
+		return
+	}
+
+	slog.Info("Incident note created successfully",
+		"alert_id", alert.ID,
+		"incident_id", incidentID,
+		"note_id", note.ID,
+		"user", ackEvent.UserName,
+		"response_time", noteResponseTime)
 }
 
 // Resolve resolves an incident in PagerDuty.
@@ -216,7 +256,7 @@ func (c *Client) Resolve(ctx context.Context, alert *entity.Alert) error {
 		return fmt.Errorf("pagerduty routing key not configured")
 	}
 
-	dedupKey := alert.GetExternalReference("pagerduty")
+	dedupKey := alert.PagerDutyIncidentID
 	if dedupKey == "" {
 		dedupKey = c.buildDedupKey(alert)
 	}
@@ -252,6 +292,34 @@ func (c *Client) Resolve(ctx context.Context, alert *entity.Alert) error {
 		"alert_name", alert.Name,
 		"dedup_key", dedupKey,
 		"response_time", responseTime)
+
+	return nil
+}
+
+// RunHealthCheck performs an on-demand health check if health checker is available.
+// Returns error if health check fails, nil if check passes or checker unavailable.
+func (c *Client) RunHealthCheck(ctx context.Context) error {
+	if c.healthChecker == nil {
+		slog.Debug("PagerDuty health check skipped: health checker not configured")
+		return nil
+	}
+
+	result, err := c.healthChecker.Check(ctx)
+	if err != nil {
+		slog.Error("PagerDuty health check failed",
+			"service_id", c.serviceID,
+			"error", err)
+		return err
+	}
+
+	if result != nil {
+		slog.Info("PagerDuty health check completed",
+			"healthy", result.Healthy,
+			"service_id", result.ServiceID,
+			"service_name", result.ServiceName,
+			"response_time", result.ResponseTime,
+			"checked_at", result.CheckedAt)
+	}
 
 	return nil
 }
