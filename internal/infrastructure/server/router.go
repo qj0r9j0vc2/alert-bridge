@@ -32,7 +32,7 @@ func NewRouter(handlers *Handlers, logger *slog.Logger) http.Handler {
 	}
 
 	if handlers.SlackInteraction != nil {
-		mux.Handle("/webhook/slack/interaction", handlers.SlackInteraction)
+		mux.Handle("/webhook/slack/interactions", handlers.SlackInteraction)
 	}
 
 	if handlers.SlackEvents != nil {
