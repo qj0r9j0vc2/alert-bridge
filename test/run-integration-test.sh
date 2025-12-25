@@ -80,13 +80,15 @@ echo -e "\n${GREEN}✓ Test alert sent${NC}"
 # Wait for alert processing
 sleep 5
 
-# Check Alert-Bridge received the alert
+# Check Alert-Bridge logs for alert processing
 echo -e "\n${YELLOW}[6/6] Verifying alert reception...${NC}"
-ALERTS=$(curl -s http://localhost:8080/api/v1/alerts)
-if echo "$ALERTS" | grep -q "TestIntegrationAlert"; then
-    echo -e "${GREEN}✓ Alert received by Alert-Bridge${NC}"
+sleep 2
+LOGS=$(docker-compose -f docker-compose.test.yaml logs alert-bridge 2>/dev/null | grep "alert processed")
+if [ -n "$LOGS" ]; then
+    echo -e "${GREEN}✓ Alert processed by Alert-Bridge${NC}"
+    echo "$LOGS" | tail -1
 else
-    echo -e "${YELLOW}! Alert not found (may have been processed already)${NC}"
+    echo -e "${YELLOW}! No alerts processed yet (check logs below)${NC}"
 fi
 
 # Show Alert-Bridge logs
