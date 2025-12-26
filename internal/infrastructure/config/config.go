@@ -12,12 +12,13 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Storage   StorageConfig   `yaml:"storage"`
-	Slack     SlackConfig     `yaml:"slack"`
-	PagerDuty PagerDutyConfig `yaml:"pagerduty"`
-	Alerting  AlertingConfig  `yaml:"alerting"`
-	Logging   LoggingConfig   `yaml:"logging"`
+	Server       ServerConfig       `yaml:"server"`
+	Storage      StorageConfig      `yaml:"storage"`
+	Slack        SlackConfig        `yaml:"slack"`
+	PagerDuty    PagerDutyConfig    `yaml:"pagerduty"`
+	Alerting     AlertingConfig     `yaml:"alerting"`
+	Logging      LoggingConfig      `yaml:"logging"`
+	Alertmanager AlertmanagerConfig `yaml:"alertmanager"`
 }
 
 // StorageConfig holds persistence storage settings.
@@ -110,6 +111,12 @@ type LoggingConfig struct {
 	Format string `yaml:"format"`
 }
 
+// AlertmanagerConfig holds Alertmanager webhook settings.
+type AlertmanagerConfig struct {
+	WebhookSecret string   `yaml:"webhook_secret"`
+	AllowedIPs    []string `yaml:"allowed_ips"` // Optional IP whitelist (not yet implemented)
+}
+
 // Load reads configuration from file and environment.
 func Load(path string) (*Config, error) {
 	cfg := &Config{}
@@ -198,6 +205,11 @@ func (c *Config) overrideFromEnv() {
 	}
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		c.Logging.Format = v
+	}
+
+	// Alertmanager
+	if v := os.Getenv("ALERTMANAGER_WEBHOOK_SECRET"); v != "" {
+		c.Alertmanager.WebhookSecret = v
 	}
 
 	// Storage

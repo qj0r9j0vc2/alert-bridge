@@ -18,8 +18,18 @@ type Handlers struct {
 	Reload            *handler.ReloadHandler
 }
 
-// NewRouter creates the HTTP router with all handlers.
+// RouterConfig holds optional configuration for the router.
+type RouterConfig struct {
+	AlertmanagerWebhookSecret string
+}
+
+// NewRouter creates the HTTP router with all handlers (backward compatible).
 func NewRouter(handlers *Handlers, logger *slog.Logger) http.Handler {
+	return NewRouterWithConfig(handlers, logger, nil)
+}
+
+// NewRouterWithConfig creates the HTTP router with all handlers and optional config.
+func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterConfig) http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check endpoints
@@ -34,7 +44,15 @@ func NewRouter(handlers *Handlers, logger *slog.Logger) http.Handler {
 
 	// Webhook endpoints
 	if handlers.Alertmanager != nil {
-		mux.Handle("/webhook/alertmanager", handlers.Alertmanager)
+		var h http.Handler = handlers.Alertmanager
+
+		// Apply authentication middleware if secret is configured
+		if cfg != nil && cfg.AlertmanagerWebhookSecret != "" {
+			h = middleware.AlertmanagerAuth(cfg.AlertmanagerWebhookSecret, logger)(h)
+			logger.Info("Alertmanager webhook authentication enabled")
+		}
+
+		mux.Handle("/webhook/alertmanager", h)
 	}
 
 	if handlers.SlackInteraction != nil {
