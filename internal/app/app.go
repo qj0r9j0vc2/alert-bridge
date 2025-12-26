@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/repository"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/config"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/observability"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/server"
 )
 
@@ -14,11 +16,13 @@ type Application struct {
 	config        *config.Config
 	configManager *config.ConfigManager
 	logger        *AtomicLogger
+	telemetry     *observability.Telemetry
 
 	// Storage
 	alertRepo    repository.AlertRepository
 	ackEventRepo repository.AckEventRepository
 	silenceRepo  repository.SilenceRepository
+	txManager    repository.TransactionManager
 	dbCloser     io.Closer // For cleanup
 
 	// Infrastructure clients
@@ -56,6 +60,17 @@ func (app *Application) Start(ctx context.Context) error {
 func (app *Application) Shutdown() error {
 	app.logger.Get().Info("shutting down alert-bridge")
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Shutdown telemetry
+	if app.telemetry != nil {
+		if err := app.telemetry.Shutdown(ctx); err != nil {
+			app.logger.Get().Error("failed to shutdown telemetry", "error", err)
+		}
+	}
+
+	// Close database
 	if app.dbCloser != nil {
 		if err := app.dbCloser.Close(); err != nil {
 			app.logger.Get().Error("failed to close database", "error", err)
