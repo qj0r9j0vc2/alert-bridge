@@ -3,6 +3,7 @@ server:
   host: "0.0.0.0"
   read_timeout: 10s
   write_timeout: 10s
+  request_timeout: 5s
   shutdown_timeout: 5s
 
 logging:
@@ -12,48 +13,32 @@ logging:
 alertmanager:
   webhook_path: /webhook/alertmanager
 
-notifications:
-  slack:
-    enabled: true
-    webhook_url: "http://mock-slack:9091/api/chat.postMessage"
-    channel: "C123456"  # Mock channel ID
-    username: "Alert Bridge E2E"
-    icon_emoji: ":warning:"
-    templates:
-      critical: |
-        🔴 *{{ .Labels.alertname }}*
-        *Severity:* {{ .Labels.severity }}
-        *Instance:* {{ .Labels.instance }}
-        *Summary:* {{ .Annotations.summary }}
-        {{ if .Annotations.description }}*Description:* {{ .Annotations.description }}{{ end }}
-      warning: |
-        🟡 *{{ .Labels.alertname }}*
-        *Severity:* {{ .Labels.severity }}
-        *Instance:* {{ .Labels.instance }}
-        *Summary:* {{ .Annotations.summary }}
-      resolved: |
-        ✅ *RESOLVED: {{ .Labels.alertname }}*
-        *Instance:* {{ .Labels.instance }}
+slack:
+  enabled: true
+  bot_token: "xoxb-mock-token-e2e"
+  signing_secret: "mock-signing-secret"
+  channel_id: "C123456"
+  app_id: "A123456"
+  api_url: "http://mock-slack:9091/api/"
 
-  pagerduty:
-    enabled: true
-    integration_key: "mock-routing-key"
-    api_url: "http://mock-pagerduty:9092/v2/enqueue"
-    severity_map:
-      critical: critical
-      warning: warning
-      info: info
+pagerduty:
+  enabled: true
+  api_token: "mock-api-token"
+  routing_key: "mock-routing-key"
+  service_id: "PSERVICE1"
+  webhook_secret: "mock-webhook-secret"
+  from_email: "alert-bridge-e2e@example.com"
+  default_severity: warning
+  api_url: "http://mock-pagerduty:9092"
+
+alerting:
+  deduplication_window: 5m
+  resend_interval: 1h
+  silence_durations:
+    - 30m
+    - 1h
+    - 4h
+    - 24h
 
 storage:
   type: memory
-  memory:
-    max_alerts: 1000
-    cleanup_interval: 5m
-
-deduplication:
-  enabled: true
-  window: 5m
-  fingerprint_labels:
-    - alertname
-    - instance
-    - severity
