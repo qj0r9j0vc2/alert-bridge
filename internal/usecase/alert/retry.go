@@ -9,6 +9,7 @@ import (
 	domainerrors "github.com/qj0r9j0vc2/alert-bridge/internal/domain/errors"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/observability"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/resilience"
 )
 
 // RetryPolicy defines the retry behavior for failed operations.
@@ -31,22 +32,31 @@ func DefaultRetryPolicy() RetryPolicy {
 	}
 }
 
-// RetryableNotifier wraps a Notifier with retry logic for transient failures.
-// It implements the Decorator pattern to add retry capabilities.
+// RetryableNotifier wraps a Notifier with retry logic and circuit breaker for transient failures.
+// It implements the Decorator pattern to add retry and resilience capabilities.
 type RetryableNotifier struct {
-	notifier Notifier
-	policy   RetryPolicy
-	logger   Logger
-	metrics  *observability.Metrics
+	notifier       Notifier
+	policy         RetryPolicy
+	logger         Logger
+	metrics        *observability.Metrics
+	circuitBreaker *resilience.CircuitBreaker
 }
 
 // NewRetryableNotifier creates a new RetryableNotifier with the given policy.
 func NewRetryableNotifier(notifier Notifier, policy RetryPolicy, logger Logger, metrics *observability.Metrics) *RetryableNotifier {
+	// Create circuit breaker for this notifier
+	cb := resilience.NewCircuitBreaker(
+		notifier.Name(),
+		5,              // max 5 failures
+		30*time.Second, // 30s timeout
+	)
+
 	return &RetryableNotifier{
-		notifier: notifier,
-		policy:   policy,
-		logger:   logger,
-		metrics:  metrics,
+		notifier:       notifier,
+		policy:         policy,
+		logger:         logger,
+		metrics:        metrics,
+		circuitBreaker: cb,
 	}
 }
 
@@ -75,8 +85,22 @@ func (r *RetryableNotifier) Notify(ctx context.Context, alert *entity.Alert) (st
 		if attempt > 1 {
 			retriesUsed++
 		}
-		// Attempt notification
-		messageID, lastErr = r.notifier.Notify(ctx, alert)
+
+		// Attempt notification through circuit breaker
+		cbErr := r.circuitBreaker.Execute(ctx, func() error {
+			messageID, lastErr = r.notifier.Notify(ctx, alert)
+			return lastErr
+		})
+
+		// Check if circuit breaker blocked the request
+		if cbErr == resilience.ErrCircuitOpen {
+			r.logger.Warn("circuit breaker open, skipping notification",
+				"notifier", r.notifier.Name(),
+				"alert_id", alert.ID,
+				"cb_state", r.circuitBreaker.State(),
+			)
+			return "", cbErr
+		}
 
 		// Success - return immediately
 		if lastErr == nil {

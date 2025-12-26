@@ -103,3 +103,19 @@ logging:
   level: info
   # Log format (json, text)
   format: json
+
+# Observability configuration
+observability:
+  metrics:
+    enabled: true
+
+# Resilience configuration
+resilience:
+  circuit_breaker:
+    max_failures: 5        # Maximum failures before opening circuit
+    timeout: 30s           # Time before attempting half-open state
+  retry:
+    max_attempts: 3        # Maximum retry attempts
+    initial_delay: 100ms   # Initial backoff delay
+    max_delay: 5s          # Maximum backoff delay
+    multiplier: 2.0        # Backoff multiplier
