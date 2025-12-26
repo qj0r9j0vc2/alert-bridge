@@ -62,6 +62,7 @@ func (app *Application) initializeHandlers() error {
 func (app *Application) setupServer() error {
 	routerConfig := &server.RouterConfig{
 		AlertmanagerWebhookSecret: app.config.Alertmanager.WebhookSecret,
+		RequestTimeout:            app.config.Server.RequestTimeout,
 	}
 	router := server.NewRouterWithConfig(app.handlers, app.logger.Get(), routerConfig)
 	app.server = server.New(app.config.Server, router, app.logger.Get())

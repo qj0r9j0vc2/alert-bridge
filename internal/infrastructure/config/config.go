@@ -75,6 +75,7 @@ type ServerConfig struct {
 	Port            int           `yaml:"port"`
 	ReadTimeout     time.Duration `yaml:"read_timeout"`
 	WriteTimeout    time.Duration `yaml:"write_timeout"`
+	RequestTimeout  time.Duration `yaml:"request_timeout"`
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
 }
 
@@ -293,6 +294,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Server.WriteTimeout == 0 {
 		c.Server.WriteTimeout = 10 * time.Second
+	}
+	if c.Server.RequestTimeout == 0 {
+		c.Server.RequestTimeout = 30 * time.Second
 	}
 	if c.Server.ShutdownTimeout == 0 {
 		c.Server.ShutdownTimeout = 30 * time.Second

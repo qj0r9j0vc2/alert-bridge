@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler/middleware"
@@ -21,6 +22,7 @@ type Handlers struct {
 // RouterConfig holds optional configuration for the router.
 type RouterConfig struct {
 	AlertmanagerWebhookSecret string
+	RequestTimeout            time.Duration
 }
 
 // NewRouter creates the HTTP router with all handlers (backward compatible).
@@ -72,6 +74,11 @@ func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterCon
 	h = middleware.RequestID(h)
 	h = middleware.Logging(logger)(h)
 	h = middleware.Recovery(logger)(h)
+
+	// Apply request timeout if configured
+	if cfg != nil && cfg.RequestTimeout > 0 {
+		h = middleware.Timeout(cfg.RequestTimeout, logger)(h)
+	}
 
 	return h
 }
