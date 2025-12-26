@@ -19,9 +19,9 @@ type Metrics struct {
 	HTTPRequestsActive  metric.Int64UpDownCounter
 
 	// Alert processing metrics
-	AlertsProcessedTotal metric.Int64Counter
+	AlertsProcessedTotal    metric.Int64Counter
 	AlertProcessingDuration metric.Float64Histogram
-	AlertsActiveGauge    metric.Int64UpDownCounter
+	AlertsActiveGauge       metric.Int64UpDownCounter
 
 	// Notification metrics
 	NotificationsSentTotal   metric.Int64Counter

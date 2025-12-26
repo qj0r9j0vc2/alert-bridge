@@ -15,11 +15,11 @@ import (
 
 // HandleInteractionUseCase processes Slack button clicks and other interactions.
 type HandleInteractionUseCase struct {
-	alertRepo    repository.AlertRepository
-	silenceRepo  repository.SilenceRepository
-	syncAckUC    *ack.SyncAckUseCase
-	slackClient  SlackClient
-	logger       alert.Logger
+	alertRepo   repository.AlertRepository
+	silenceRepo repository.SilenceRepository
+	syncAckUC   *ack.SyncAckUseCase
+	slackClient SlackClient
+	logger      alert.Logger
 }
 
 // SlackClient defines the required Slack client operations.

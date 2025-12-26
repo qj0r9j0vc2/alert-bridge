@@ -1,0 +1,97 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alert-bridge
+  annotations:
+    # Cert-manager annotation for automatic TLS certificate provisioning
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # Nginx ingress annotations
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # Request body size limit (Alertmanager webhooks can be large)
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+
+    # Timeouts for webhook processing
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+
+    # Rate limiting (adjust based on alert volume)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - alert-bridge.example.com
+    secretName: alert-bridge-tls
+  rules:
+  - host: alert-bridge.example.com
+    http:
+      paths:
+      # Slack webhook endpoints
+      - path: /webhook/slack/commands
+        pathType: Prefix
+        backend:
+          service:
+            name: alert-bridge
+            port:
+              name: http
+      - path: /webhook/slack/interactions
+        pathType: Prefix
+        backend:
+          service:
+            name: alert-bridge
+            port:
+              name: http
+      - path: /webhook/slack/events
+        pathType: Prefix
+        backend:
+          service:
+            name: alert-bridge
+            port:
+              name: http
+
+      # Alertmanager webhook endpoint
+      - path: /webhook/alertmanager
+        pathType: Prefix
+        backend:
+          service:
+            name: alert-bridge
+            port:
+              name: http
+
+      # PagerDuty webhook endpoint (optional)
+      - path: /webhook/pagerduty
+        pathType: Prefix
+        backend:
+          service:
+            name: alert-bridge
+            port:
+              name: http
+
+      # Health check endpoint (public for monitoring)
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: alert-bridge
+            port:
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-bridge
+  labels:
+    app: alert-bridge
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: alert-bridge

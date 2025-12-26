@@ -11,27 +11,27 @@ import (
 
 // TestReport represents a comprehensive test execution report
 type TestReport struct {
-	StartTime      time.Time             `json:"start_time"`
-	EndTime        time.Time             `json:"end_time"`
-	Duration       string                `json:"duration"`
-	TotalTests     int                   `json:"total_tests"`
-	PassedTests    int                   `json:"passed_tests"`
-	FailedTests    int                   `json:"failed_tests"`
-	SkippedTests   int                   `json:"skipped_tests"`
-	TestResults    []TestResult          `json:"test_results"`
-	Environment    map[string]string     `json:"environment"`
-	Summary        string                `json:"summary"`
+	StartTime    time.Time         `json:"start_time"`
+	EndTime      time.Time         `json:"end_time"`
+	Duration     string            `json:"duration"`
+	TotalTests   int               `json:"total_tests"`
+	PassedTests  int               `json:"passed_tests"`
+	FailedTests  int               `json:"failed_tests"`
+	SkippedTests int               `json:"skipped_tests"`
+	TestResults  []TestResult      `json:"test_results"`
+	Environment  map[string]string `json:"environment"`
+	Summary      string            `json:"summary"`
 }
 
 // TestResult represents the result of a single test
 type TestResult struct {
-	Name       string        `json:"name"`
-	Status     string        `json:"status"` // passed, failed, skipped
-	Duration   string        `json:"duration"`
-	StartTime  time.Time     `json:"start_time"`
-	EndTime    time.Time     `json:"end_time"`
-	Error      string        `json:"error,omitempty"`
-	Phases     []TestPhase   `json:"phases,omitempty"`
+	Name      string      `json:"name"`
+	Status    string      `json:"status"` // passed, failed, skipped
+	Duration  string      `json:"duration"`
+	StartTime time.Time   `json:"start_time"`
+	EndTime   time.Time   `json:"end_time"`
+	Error     string      `json:"error,omitempty"`
+	Phases    []TestPhase `json:"phases,omitempty"`
 }
 
 // TestPhase represents a phase within a test

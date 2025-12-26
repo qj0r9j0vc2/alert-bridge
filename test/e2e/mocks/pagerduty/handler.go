@@ -10,12 +10,12 @@ import (
 
 // V2Event represents a PagerDuty Events API v2 event
 type V2Event struct {
-	RoutingKey  string       `json:"routing_key"`
-	EventAction string       `json:"event_action"`
-	DedupKey    string       `json:"dedup_key,omitempty"`
+	RoutingKey  string        `json:"routing_key"`
+	EventAction string        `json:"event_action"`
+	DedupKey    string        `json:"dedup_key,omitempty"`
 	Payload     *EventPayload `json:"payload,omitempty"`
-	Images      []Image      `json:"images,omitempty"`
-	Links       []Link       `json:"links,omitempty"`
+	Images      []Image       `json:"images,omitempty"`
+	Links       []Link        `json:"links,omitempty"`
 }
 
 // EventPayload represents the event payload
@@ -66,9 +66,9 @@ type StoredEvent struct {
 
 // MockPagerDutyHandler handles PagerDuty API requests
 type MockPagerDutyHandler struct {
-	mu       sync.RWMutex
-	events   []StoredEvent
-	nextID   int64
+	mu     sync.RWMutex
+	events []StoredEvent
+	nextID int64
 }
 
 // NewMockPagerDutyHandler creates a new mock PagerDuty handler

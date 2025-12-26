@@ -11,9 +11,9 @@ import (
 // AckEventRepository provides an in-memory implementation of repository.AckEventRepository.
 // Thread-safe for concurrent access.
 type AckEventRepository struct {
-	mu         sync.RWMutex
-	events     map[string]*entity.AckEvent // id -> event
-	byAlertID  map[string][]string         // alertID -> event IDs
+	mu        sync.RWMutex
+	events    map[string]*entity.AckEvent // id -> event
+	byAlertID map[string][]string         // alertID -> event IDs
 }
 
 // NewAckEventRepository creates a new in-memory ack event repository.

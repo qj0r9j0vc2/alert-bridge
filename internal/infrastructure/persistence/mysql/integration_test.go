@@ -1439,7 +1439,7 @@ func TestConnectionPool_ExhaustionAndRecovery(t *testing.T) {
 			Password: "password",
 		},
 		Pool: config.MySQLPoolConfig{
-			MaxOpenConns:    3,  // Small pool to force exhaustion
+			MaxOpenConns:    3, // Small pool to force exhaustion
 			MaxIdleConns:    1,
 			ConnMaxLifetime: 3 * time.Minute,
 			ConnMaxIdleTime: 1 * time.Minute,
@@ -1588,11 +1588,11 @@ func TestMySQL_ConnectionLossAndRecovery(t *testing.T) {
 
 	// Try to use the connection - it should recover
 	alert2 := entity.NewAlert("fp-2", "Alert2", "server-2", "http://example.com", "Summary", entity.SeverityCritical)
-	
+
 	// Retry logic (simulating application-level retry)
 	maxRetries := 3
 	var lastErr error
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		err = repo.Save(ctx, alert2)
 		if err == nil {

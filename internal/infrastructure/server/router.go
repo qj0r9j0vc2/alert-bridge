@@ -14,6 +14,7 @@ import (
 // Handlers holds all HTTP handlers.
 type Handlers struct {
 	Alertmanager     *handler.AlertmanagerHandler
+	SlackCommands    *handler.SlackCommandsHandler
 	SlackInteraction *handler.SlackInteractionHandler
 	SlackEvents      *handler.SlackEventsHandler
 	PagerDutyWebhook *handler.PagerDutyWebhookHandler
@@ -69,6 +70,18 @@ func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterCon
 		}
 
 		mux.Handle("/webhook/alertmanager", h)
+	}
+
+	if handlers.SlackCommands != nil {
+		var h http.Handler = handlers.SlackCommands
+
+		// Apply Slack authentication middleware
+		if cfg != nil && cfg.SlackSigningSecret != "" {
+			h = middleware.SlackAuth(cfg.SlackSigningSecret, logger)(h)
+			logger.Info("Slack commands webhook authentication enabled")
+		}
+
+		mux.Handle("/webhook/slack/commands", h)
 	}
 
 	if handlers.SlackInteraction != nil {

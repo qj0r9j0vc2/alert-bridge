@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	domainerrors "github.com/qj0r9j0vc2/alert-bridge/internal/domain/errors"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
+	domainerrors "github.com/qj0r9j0vc2/alert-bridge/internal/domain/errors"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/observability"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/resilience"
 )

@@ -257,15 +257,15 @@ func (r *SilenceRepository) DeleteExpired(ctx context.Context) (int, error) {
 // scanSilence scans a single row into a SilenceMark entity.
 func scanSilence(row *sql.Row) (*entity.SilenceMark, error) {
 	var (
-		silence      entity.SilenceMark
-		alertID      sql.NullString
-		instance     sql.NullString
-		fingerprint  sql.NullString
-		labels       string
-		startAt      string
-		endAt        string
-		source       string
-		createdAt    string
+		silence     entity.SilenceMark
+		alertID     sql.NullString
+		instance    sql.NullString
+		fingerprint sql.NullString
+		labels      string
+		startAt     string
+		endAt       string
+		source      string
+		createdAt   string
 	)
 
 	err := row.Scan(
@@ -303,15 +303,15 @@ func scanSilences(rows *sql.Rows) ([]*entity.SilenceMark, error) {
 
 	for rows.Next() {
 		var (
-			silence      entity.SilenceMark
-			alertID      sql.NullString
-			instance     sql.NullString
-			fingerprint  sql.NullString
-			labels       string
-			startAt      string
-			endAt        string
-			source       string
-			createdAt    string
+			silence     entity.SilenceMark
+			alertID     sql.NullString
+			instance    sql.NullString
+			fingerprint sql.NullString
+			labels      string
+			startAt     string
+			endAt       string
+			source      string
+			createdAt   string
 		)
 
 		err := rows.Scan(

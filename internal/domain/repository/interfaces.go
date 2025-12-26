@@ -33,6 +33,11 @@ type AlertRepository interface {
 	// FindActive returns all currently active (non-resolved) alerts.
 	FindActive(ctx context.Context) ([]*entity.Alert, error)
 
+	// GetActiveAlerts returns active alerts, optionally filtered by severity.
+	// If severity is empty, returns all active alerts.
+	// Valid severity values: "critical", "warning", "info"
+	GetActiveAlerts(ctx context.Context, severity string) ([]*entity.Alert, error)
+
 	// FindFiring returns all firing alerts (active or acknowledged).
 	FindFiring(ctx context.Context) ([]*entity.Alert, error)
 

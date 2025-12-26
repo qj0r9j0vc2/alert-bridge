@@ -7,11 +7,11 @@ import (
 
 // reloadableKeys defines the whitelist of configuration keys that can be hot-reloaded.
 var reloadableKeys = map[string]bool{
-	"logging.level":                  true,
-	"logging.format":                 true,
-	"slack.channel_id":               true,
-	"alerting.deduplication_window":  true,
-	"alerting.resend_interval":       true,
+	"logging.level":                 true,
+	"logging.format":                true,
+	"slack.channel_id":              true,
+	"alerting.deduplication_window": true,
+	"alerting.resend_interval":      true,
 }
 
 // staticKeys defines configuration keys that require application restart.
@@ -194,8 +194,23 @@ func (c *Config) Validate() error {
 		if err := ValidateNonEmpty(c.Slack.ChannelID, "slack.channel_id"); err != nil {
 			errors = append(errors, err.Error())
 		}
-		if err := ValidateNonEmpty(c.Slack.SigningSecret, "slack.signing_secret"); err != nil {
-			errors = append(errors, err.Error())
+
+		// Socket Mode validation
+		if c.Slack.SocketMode.Enabled {
+			// Socket Mode requires app token
+			if err := ValidateNonEmpty(c.Slack.SocketMode.AppToken, "slack.socket_mode.app_token"); err != nil {
+				errors = append(errors, err.Error())
+			}
+			// Socket Mode requires ping interval
+			if err := ValidateDuration(c.Slack.SocketMode.PingInterval, "slack.socket_mode.ping_interval"); err != nil {
+				errors = append(errors, err.Error())
+			}
+			// Note: Signing secret is optional in Socket Mode (only used for HTTP webhooks)
+		} else {
+			// HTTP Mode requires signing secret
+			if err := ValidateNonEmpty(c.Slack.SigningSecret, "slack.signing_secret"); err != nil {
+				errors = append(errors, err.Error())
+			}
 		}
 	}
 

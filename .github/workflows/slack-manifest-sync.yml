@@ -1,0 +1,60 @@
+name: Slack Manifest Validation
+
+on:
+  pull_request:
+    paths:
+      - 'manifest.json'
+  push:
+    branches:
+      - main
+    paths:
+      - 'manifest.json'
+
+jobs:
+  validate-manifest:
+    name: Validate Slack App Manifest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install JSON schema validator
+        run: npm install -g ajv-cli
+
+      - name: Validate manifest against schema
+        run: |
+          chmod +x scripts/manifest-validate.sh
+          ./scripts/manifest-validate.sh
+
+      - name: Install Slack CLI
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          curl -fsSL https://downloads.slack-edge.com/slack-cli/install.sh | bash
+
+      - name: Slack CLI manifest diff
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SLACK_APP_ID: ${{ secrets.SLACK_APP_ID }}
+          SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
+        run: |
+          # Show diff between local manifest and deployed app
+          slack manifest diff --app-id "$SLACK_APP_ID" --manifest manifest.json || true
+        continue-on-error: true
+
+      - name: Comment validation result on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Slack manifest validation passed!'
+            })

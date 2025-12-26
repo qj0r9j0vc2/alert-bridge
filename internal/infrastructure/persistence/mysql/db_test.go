@@ -127,8 +127,8 @@ func TestDB_Replica(t *testing.T) {
 
 	// When replica configured, should return replica
 	// (In real scenario, these would be actual *sql.DB instances)
-	db.primary = nil  // Would be actual connection
-	db.replica = nil  // Would be actual connection
+	db.primary = nil // Would be actual connection
+	db.replica = nil // Would be actual connection
 	assert.Equal(t, db.replica, db.Replica())
 }
 
