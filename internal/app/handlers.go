@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/server"
 	pdUseCase "github.com/qj0r9j0vc2/alert-bridge/internal/usecase/pagerduty"
@@ -24,6 +26,15 @@ func (app *Application) initializeHandlers() error {
 
 	// Slack handlers (if enabled)
 	if app.config.IsSlackEnabled() {
+		queryAlertStatusUC := slackUseCase.NewQueryAlertStatusUseCase(
+			app.alertRepo,
+		)
+
+		app.handlers.SlackCommands = handler.NewSlackCommandsHandler(
+			queryAlertStatusUC,
+			app.logger.Get(),
+		)
+
 		handleSlackInteractionUC := slackUseCase.NewHandleInteractionUseCase(
 			app.alertRepo,
 			app.silenceRepo,
@@ -67,6 +78,20 @@ func (app *Application) setupServer() error {
 		Metrics:                   app.telemetry.Metrics,
 	}
 	router := server.NewRouterWithConfig(app.handlers, app.logger.Get(), routerConfig)
-	app.server = server.New(app.config.Server, router, app.logger.Get())
+	srv, err := server.New(*app.config, router, app.logger.Get())
+	if err != nil {
+		return fmt.Errorf("failed to create server: %w", err)
+	}
+
+	// Configure health check to report Slack status
+	if app.config.IsSlackEnabled() && app.handlers.Health != nil {
+		app.handlers.Health.SetSlackStatus(
+			true,
+			app.config.Slack.SocketMode.Enabled,
+			srv.SocketModeClient(),
+		)
+	}
+
+	app.server = srv
 	return nil
 }
