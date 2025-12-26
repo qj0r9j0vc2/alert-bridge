@@ -1,0 +1,4 @@
+# This directory is used by Slack CLI to store project configuration.
+# The .gitkeep file ensures the directory structure is preserved in git.
+#
+# Note: credentials.json is gitignored and should never be committed.
