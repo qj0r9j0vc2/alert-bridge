@@ -6,10 +6,16 @@ A unified alert management system that bridges Alertmanager with Slack and Pager
 
 - **Alert Processing**: Receive and process alerts from Alertmanager webhooks
 - **Bidirectional Sync**: Synchronize acknowledgments between Slack and PagerDuty
+  - **Slack → PagerDuty**: Acknowledge button in Slack updates PagerDuty incident
+  - **PagerDuty → Slack**: Acknowledgment/resolution in PagerDuty updates Slack message
+- **PagerDuty Webhook Integration**: Secure webhook receiver with HMAC-SHA256 signature validation
+  - Supports `incident.acknowledged` and `incident.resolved` events
+  - Configuration hot-reload for webhook secret rotation
+  - Sub-2s webhook processing with performance monitoring
 - **Persistent Storage**: SQLite and MySQL-based persistence for alerts, ack events, and silence rules
 - **Silence Management**: Create and manage alert silences across platforms
-- **Audit Trail**: Complete history of all acknowledgment events
-- **High Performance**: Sub-millisecond read/write operations
+- **Audit Trail**: Complete history of all acknowledgment events with source attribution
+- **High Performance**: Sub-millisecond read/write operations with indexed queries
 - **Webhook Security**: Optional HMAC-SHA256 signature verification for Alertmanager webhooks
 - **Hot Reload**: Configuration hot reload without service restart
 - **Clean Architecture**: Modular design with Application struct and factory pattern
@@ -90,6 +96,42 @@ Verify it's running:
 ```bash
 curl http://localhost:8080/health
 ```
+
+### PagerDuty Webhook Setup
+
+To enable bidirectional sync from PagerDuty to Slack:
+
+1. **Configure webhook secret** in your environment variables:
+   ```bash
+   export PAGERDUTY_WEBHOOK_SECRET="whsec_..."
+   ```
+
+2. **Create webhook extension** in PagerDuty:
+   - Navigate to **Integrations → Generic Webhooks (v3)** in PagerDuty
+   - Click **+ New Webhook**
+   - Set **Destination URL**: `https://your-alert-bridge.example.com/webhook/pagerduty`
+   - Subscribe to events: `incident.acknowledged`, `incident.resolved`
+   - Copy the **Webhook Secret** (format: `whsec_...`)
+
+3. **Test webhook integration**:
+   ```bash
+   # Create test alert
+   curl -X POST http://localhost:8080/api/v1/alerts -d '{"name":"test","severity":"critical"}'
+
+   # Acknowledge in PagerDuty web UI
+   # Check alert-bridge logs for webhook reception
+   ```
+
+For detailed setup instructions, see [specs/feat-pagerduty-slack-ack/quickstart.md](specs/feat-pagerduty-slack-ack/quickstart.md).
+
+#### Troubleshooting PagerDuty Webhooks
+
+| Issue | Possible Cause | Solution |
+|-------|---------------|----------|
+| `401 Unauthorized` | Invalid webhook secret | Verify `PAGERDUTY_WEBHOOK_SECRET` matches PagerDuty webhook configuration |
+| Webhook not received | Firewall blocking | Ensure port 8080/443 is accessible from PagerDuty servers |
+| Slack message not updated | Alert not found | Verify alert was created by alert-bridge (external incidents not tracked) |
+| Slow processing (>2s) | Database performance | Check logs for slow query warnings (`duration_ms` >10ms) |
 
 ## Documentation
 
