@@ -9,8 +9,8 @@ services:
     ports:
       - "${E2E_BASE_PORT:-9000}:9090"
     volumes:
-      - ./test/e2e-config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./test/e2e-config/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - ./e2e-config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./e2e-config/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -34,7 +34,7 @@ services:
     ports:
       - "${E2E_BASE_PORT_ALERTMANAGER:-9093}:9093"
     volumes:
-      - ./test/e2e-config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./e2e-config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
@@ -54,7 +54,7 @@ services:
   # Mock Slack - Test double for Slack Webhook API
   mock-slack:
     build:
-      context: ./test/e2e/mocks/slack
+      context: ./e2e/mocks/slack
       dockerfile: Dockerfile
     container_name: e2e-mock-slack
     hostname: mock-slack
@@ -77,7 +77,7 @@ services:
   # Mock PagerDuty - Test double for PagerDuty Events API v2
   mock-pagerduty:
     build:
-      context: ./test/e2e/mocks/pagerduty
+      context: ./e2e/mocks/pagerduty
       dockerfile: Dockerfile
     container_name: e2e-mock-pagerduty
     hostname: mock-pagerduty
@@ -98,14 +98,14 @@ services:
   # Alert-Bridge - System under test
   alert-bridge:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     container_name: e2e-alert-bridge
     hostname: alert-bridge
     ports:
       - "${E2E_ALERT_BRIDGE_PORT:-9080}:8080"
     volumes:
-      - ./test/e2e-config/alert-bridge.yaml:/app/config/config.yaml:ro
+      - ./e2e-config/alert-bridge.yaml:/app/config/config.yaml:ro
     environment:
       - CONFIG_PATH=/app/config/config.yaml
       - LOG_LEVEL=${E2E_LOG_LEVEL:-info}

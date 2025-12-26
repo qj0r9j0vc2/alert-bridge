@@ -6,8 +6,9 @@ WORKDIR /build
 # Copy mock service source
 COPY . .
 
-# Build static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s -w' -o mock-pagerduty .
+# Initialize Go module and build static binary
+RUN go mod init mock-pagerduty && \
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s -w' -o mock-pagerduty .
 
 # Runtime stage
 FROM alpine:3.19
