@@ -11,9 +11,9 @@ import (
 // Thread-safe for concurrent access.
 type AlertRepository struct {
 	mu            sync.RWMutex
-	alerts        map[string]*entity.Alert          // id -> alert
-	byFingerprint map[string][]string               // fingerprint -> alert IDs
-	byExternalRef map[string]map[string]string      // system -> (referenceID -> alert ID)
+	alerts        map[string]*entity.Alert     // id -> alert
+	byFingerprint map[string][]string          // fingerprint -> alert IDs
+	byExternalRef map[string]map[string]string // system -> (referenceID -> alert ID)
 }
 
 // NewAlertRepository creates a new in-memory alert repository.
@@ -176,6 +176,26 @@ func (r *AlertRepository) FindFiring(ctx context.Context) ([]*entity.Alert, erro
 		}
 	}
 	return firing, nil
+}
+
+// GetActiveAlerts returns active alerts, optionally filtered by severity.
+// Pass empty string for severity to get all active alerts.
+func (r *AlertRepository) GetActiveAlerts(ctx context.Context, severity string) ([]*entity.Alert, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var active []*entity.Alert
+	for _, alert := range r.alerts {
+		if alert.IsActive() {
+			// Filter by severity if specified
+			if severity != "" && string(alert.Severity) != severity {
+				continue
+			}
+			alertCopy := *alert
+			active = append(active, &alertCopy)
+		}
+	}
+	return active, nil
 }
 
 // Delete removes an alert by ID.

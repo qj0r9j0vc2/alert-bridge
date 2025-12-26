@@ -194,6 +194,42 @@ func (r *AlertRepository) FindFiring(ctx context.Context) ([]*entity.Alert, erro
 	return scanAlerts(rows)
 }
 
+// GetActiveAlerts returns active alerts, optionally filtered by severity.
+// Pass empty string for severity to get all active alerts.
+func (r *AlertRepository) GetActiveAlerts(ctx context.Context, severity string) ([]*entity.Alert, error) {
+	var query string
+	var args []interface{}
+
+	if severity == "" {
+		query = `
+			SELECT id, fingerprint, name, instance, target, summary, description,
+				severity, state, labels, annotations,
+				external_references,
+				fired_at, acked_at, acked_by, resolved_at, created_at, updated_at
+			FROM alerts WHERE state != 'resolved'
+			ORDER BY fired_at DESC
+		`
+	} else {
+		query = `
+			SELECT id, fingerprint, name, instance, target, summary, description,
+				severity, state, labels, annotations,
+				external_references,
+				fired_at, acked_at, acked_by, resolved_at, created_at, updated_at
+			FROM alerts WHERE state != 'resolved' AND severity = ?
+			ORDER BY fired_at DESC
+		`
+		args = append(args, severity)
+	}
+
+	rows, err := r.db.getExecutor(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query active alerts: %w", err)
+	}
+	defer rows.Close()
+
+	return scanAlerts(rows)
+}
+
 // Delete removes an alert by ID.
 // Returns ErrAlertNotFound if the alert doesn't exist.
 func (r *AlertRepository) Delete(ctx context.Context, id string) error {
