@@ -7,6 +7,7 @@ import (
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler/middleware"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/config"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/observability"
 )
 
@@ -23,6 +24,9 @@ type Handlers struct {
 
 // RouterConfig holds optional configuration for the router.
 type RouterConfig struct {
+	// Config manager for hot-reload support
+	ConfigManager *config.ConfigManager
+	// Static configuration (backward compatibility)
 	AlertmanagerWebhookSecret string
 	SlackSigningSecret        string
 	PagerDutyWebhookSecret    string
@@ -94,10 +98,25 @@ func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterCon
 	if handlers.PagerDutyWebhook != nil {
 		var h http.Handler = handlers.PagerDutyWebhook
 
-		// Apply PagerDuty authentication middleware
-		if cfg != nil && cfg.PagerDutyWebhookSecret != "" {
-			h = middleware.PagerDutyAuth(cfg.PagerDutyWebhookSecret, logger)(h)
-			logger.Info("PagerDuty webhook authentication enabled")
+		// Apply PagerDuty authentication middleware with hot-reload support
+		if cfg != nil {
+			// Create getter function that reads secret from config on each request
+			var secretGetter middleware.WebhookSecretGetter
+			if cfg.ConfigManager != nil {
+				// Hot-reload enabled: read from ConfigManager on each request
+				secretGetter = func() string {
+					return cfg.ConfigManager.Get().PagerDuty.WebhookSecret
+				}
+			} else {
+				// Backward compatibility: use static secret
+				secretGetter = func() string {
+					return cfg.PagerDutyWebhookSecret
+				}
+			}
+			h = middleware.PagerDutyAuth(secretGetter, logger)(h)
+			logger.Info("PagerDuty webhook authentication enabled",
+				"hot_reload", cfg.ConfigManager != nil,
+			)
 		}
 
 		mux.Handle("/webhook/pagerduty", h)

@@ -11,12 +11,21 @@ import (
 	"strings"
 )
 
+// WebhookSecretGetter is a function that returns the current webhook secret.
+// Used for hot-reload support - secret is read on each request.
+type WebhookSecretGetter func() string
+
 // PagerDutyAuth creates middleware for PagerDuty webhook signature verification.
 // Implements the PagerDuty webhook signature verification protocol:
 // https://developer.pagerduty.com/docs/ZG9jOjQ1MTg4ODQ0-verifying-signatures
-func PagerDutyAuth(webhookSecret string, logger *slog.Logger) func(http.Handler) http.Handler {
+//
+// The secretGetter function is called on each request to support configuration hot-reload.
+func PagerDutyAuth(secretGetter WebhookSecretGetter, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Read current secret (supports hot-reload)
+			webhookSecret := secretGetter()
+
 			// Skip auth if no secret configured (backward compatible)
 			if webhookSecret == "" {
 				logger.Warn("pagerduty webhook secret not configured, skipping signature verification")
@@ -36,17 +45,32 @@ func PagerDutyAuth(webhookSecret string, logger *slog.Logger) func(http.Handler)
 			// Get signatures from header (PagerDuty may send multiple)
 			signatures := r.Header.Values("X-PagerDuty-Signature")
 			if len(signatures) == 0 {
-				logger.Warn("missing pagerduty signature header")
+				logger.Warn("pagerduty webhook signature validation failed",
+					"reason", "missing_signature",
+					"remote_addr", r.RemoteAddr,
+					"user_agent", r.UserAgent(),
+				)
 				http.Error(w, "missing signature", http.StatusUnauthorized)
 				return
 			}
 
 			// Verify at least one signature matches
 			if !verifyPagerDutySignature(body, signatures, webhookSecret) {
-				logger.Warn("invalid pagerduty signature")
+				logger.Warn("pagerduty webhook signature validation failed",
+					"reason", "invalid_signature",
+					"remote_addr", r.RemoteAddr,
+					"user_agent", r.UserAgent(),
+					"signature_count", len(signatures),
+				)
 				http.Error(w, "invalid signature", http.StatusUnauthorized)
 				return
 			}
+
+			// Log successful validation for security audit trail
+			logger.Info("pagerduty webhook signature validated",
+				"remote_addr", r.RemoteAddr,
+				"user_agent", r.UserAgent(),
+			)
 
 			// Restore body for handler
 			r.Body = io.NopCloser(bytes.NewReader(body))

@@ -59,6 +59,7 @@ func (app *Application) initializeHandlers() error {
 
 func (app *Application) setupServer() error {
 	routerConfig := &server.RouterConfig{
+		ConfigManager:             app.configManager, // Enable hot-reload
 		AlertmanagerWebhookSecret: app.config.Alertmanager.WebhookSecret,
 		SlackSigningSecret:        app.config.Slack.SigningSecret,
 		PagerDutyWebhookSecret:    app.config.PagerDuty.WebhookSecret,
