@@ -2,12 +2,15 @@ package slack
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
 	"github.com/slack-go/slack"
 
+	domainerrors "github.com/qj0r9j0vc2/alert-bridge/internal/domain/errors"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
 )
 
@@ -39,7 +42,7 @@ func (c *Client) Notify(ctx context.Context, alert *entity.Alert) (string, error
 
 	channelID, timestamp, err := c.api.PostMessageContext(ctx, c.channelID, options...)
 	if err != nil {
-		return "", fmt.Errorf("posting slack message: %w", err)
+		return "", categorizeSlackError(err, "posting slack message")
 	}
 
 	// Return channel:timestamp as message ID
@@ -67,7 +70,7 @@ func (c *Client) UpdateMessage(ctx context.Context, messageID string, alert *ent
 
 	_, _, _, err = c.api.UpdateMessageContext(ctx, channelID, timestamp, options...)
 	if err != nil {
-		return fmt.Errorf("updating slack message: %w", err)
+		return categorizeSlackError(err, "updating slack message")
 	}
 
 	return nil
@@ -92,7 +95,7 @@ func (c *Client) PostThreadReply(ctx context.Context, messageID, text string) er
 
 	_, _, err = c.api.PostMessageContext(ctx, channelID, options...)
 	if err != nil {
-		return fmt.Errorf("posting thread reply: %w", err)
+		return categorizeSlackError(err, "posting thread reply")
 	}
 
 	return nil
@@ -102,7 +105,7 @@ func (c *Client) PostThreadReply(ctx context.Context, messageID, text string) er
 func (c *Client) GetUserInfo(ctx context.Context, userID string) (*slack.User, error) {
 	user, err := c.api.GetUserInfoContext(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("getting user info: %w", err)
+		return nil, categorizeSlackError(err, "getting user info")
 	}
 	return user, nil
 }
@@ -128,10 +131,75 @@ func (c *Client) AddReaction(ctx context.Context, messageID, emoji string) error
 		Timestamp: timestamp,
 	})
 	if err != nil {
-		return fmt.Errorf("adding reaction: %w", err)
+		return categorizeSlackError(err, "adding reaction")
 	}
 
 	return nil
+}
+
+// categorizeSlackError wraps Slack API errors as transient or permanent domain errors.
+func categorizeSlackError(err error, operation string) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check for network errors (transient)
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return domainerrors.NewTransientError(
+			fmt.Sprintf("%s: network error", operation),
+			err,
+		)
+	}
+
+	// Check for Slack API errors
+	var slackErr slack.SlackErrorResponse
+	if errors.As(err, &slackErr) {
+		switch slackErr.Err {
+		// Rate limiting - transient
+		case "rate_limited":
+			return domainerrors.NewTransientError(
+				fmt.Sprintf("%s: rate limited", operation),
+				err,
+			)
+
+		// Server errors - transient
+		case "internal_error", "fatal_error", "service_unavailable":
+			return domainerrors.NewTransientError(
+				fmt.Sprintf("%s: slack server error", operation),
+				err,
+			)
+
+		// Client errors - permanent
+		case "invalid_auth", "account_inactive", "token_revoked", "no_permission",
+			"channel_not_found", "not_in_channel", "is_archived":
+			return domainerrors.NewPermanentError(
+				fmt.Sprintf("%s: %s", operation, slackErr.Err),
+				err,
+			)
+
+		// Default to permanent for unknown Slack errors
+		default:
+			return domainerrors.NewPermanentError(
+				fmt.Sprintf("%s: %s", operation, slackErr.Err),
+				err,
+			)
+		}
+	}
+
+	// Check for context errors (transient)
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return domainerrors.NewTransientError(
+			fmt.Sprintf("%s: context timeout", operation),
+			err,
+		)
+	}
+
+	// Default to permanent error
+	return domainerrors.NewPermanentError(
+		fmt.Sprintf("%s: %v", operation, err),
+		err,
+	)
 }
 
 // parseMessageID parses a message ID in the format "channel:timestamp".

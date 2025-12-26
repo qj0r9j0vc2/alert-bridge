@@ -2,11 +2,14 @@ package pagerduty
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
 
+	domainerrors "github.com/qj0r9j0vc2/alert-bridge/internal/domain/errors"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
 )
 
@@ -72,7 +75,7 @@ func (c *Client) Notify(ctx context.Context, alert *entity.Alert) (string, error
 	// Send the event
 	resp, err := pagerduty.ManageEventWithContext(ctx, *event)
 	if err != nil {
-		return "", fmt.Errorf("sending pagerduty event: %w", err)
+		return "", categorizePagerDutyError(err, "sending pagerduty event")
 	}
 
 	// Return dedup key as the incident identifier
@@ -110,7 +113,7 @@ func (c *Client) UpdateMessage(ctx context.Context, dedupKey string, alert *enti
 
 	_, err := pagerduty.ManageEventWithContext(ctx, *event)
 	if err != nil {
-		return fmt.Errorf("updating pagerduty event: %w", err)
+		return categorizePagerDutyError(err, "updating pagerduty event")
 	}
 
 	return nil
@@ -135,7 +138,7 @@ func (c *Client) Acknowledge(ctx context.Context, alert *entity.Alert, ackEvent 
 
 	_, err := pagerduty.ManageEventWithContext(ctx, *event)
 	if err != nil {
-		return fmt.Errorf("acknowledging pagerduty event: %w", err)
+		return categorizePagerDutyError(err, "acknowledging pagerduty event")
 	}
 
 	return nil
@@ -160,7 +163,7 @@ func (c *Client) Resolve(ctx context.Context, alert *entity.Alert) error {
 
 	_, err := pagerduty.ManageEventWithContext(ctx, *event)
 	if err != nil {
-		return fmt.Errorf("resolving pagerduty event: %w", err)
+		return categorizePagerDutyError(err, "resolving pagerduty event")
 	}
 
 	return nil
@@ -258,4 +261,62 @@ func (c *Client) mapSeverity(severity entity.AlertSeverity) string {
 	default:
 		return c.defaultSeverity
 	}
+}
+
+// categorizePagerDutyError wraps PagerDuty API errors as transient or permanent domain errors.
+func categorizePagerDutyError(err error, operation string) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check for network errors (transient)
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return domainerrors.NewTransientError(
+			fmt.Sprintf("%s: network error", operation),
+			err,
+		)
+	}
+
+	// Check for PagerDuty API errors
+	var pdErr pagerduty.APIError
+	if errors.As(err, &pdErr) {
+		// Rate limiting (HTTP 429) - transient
+		if pdErr.StatusCode == 429 {
+			return domainerrors.NewTransientError(
+				fmt.Sprintf("%s: rate limited", operation),
+				err,
+			)
+		}
+
+		// Server errors (5xx) - transient
+		if pdErr.StatusCode >= 500 && pdErr.StatusCode < 600 {
+			return domainerrors.NewTransientError(
+				fmt.Sprintf("%s: pagerduty server error (status %d)", operation, pdErr.StatusCode),
+				err,
+			)
+		}
+
+		// Client errors (4xx) - permanent
+		if pdErr.StatusCode >= 400 && pdErr.StatusCode < 500 {
+			return domainerrors.NewPermanentError(
+				fmt.Sprintf("%s: client error (status %d)", operation, pdErr.StatusCode),
+				err,
+			)
+		}
+	}
+
+	// Check for context errors (transient)
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return domainerrors.NewTransientError(
+			fmt.Sprintf("%s: context timeout", operation),
+			err,
+		)
+	}
+
+	// Default to permanent error
+	return domainerrors.NewPermanentError(
+		fmt.Sprintf("%s: %v", operation, err),
+		err,
+	)
 }

@@ -21,13 +21,19 @@ func (app *Application) initializeClients() error {
 		Syncers:   make([]ack.AckSyncer, 0),
 	}
 
+	logger := &slogAdapter{logger: app.logger.Get()}
+	retryPolicy := alert.DefaultRetryPolicy()
+
 	if app.config.IsSlackEnabled() {
 		app.clients.Slack = slack.NewClient(
 			app.config.Slack.BotToken,
 			app.config.Slack.ChannelID,
 			app.config.Alerting.SilenceDurations,
 		)
-		app.clients.Notifiers = append(app.clients.Notifiers, app.clients.Slack)
+
+		// Wrap with retry logic
+		retryableSlack := alert.NewRetryableNotifier(app.clients.Slack, retryPolicy, logger)
+		app.clients.Notifiers = append(app.clients.Notifiers, retryableSlack)
 
 		app.logger.Get().Info("Slack integration enabled",
 			"channel", app.config.Slack.ChannelID,
@@ -42,7 +48,10 @@ func (app *Application) initializeClients() error {
 			app.config.PagerDuty.FromEmail,
 			app.config.PagerDuty.DefaultSeverity,
 		)
-		app.clients.Notifiers = append(app.clients.Notifiers, app.clients.PagerDuty)
+
+		// Wrap with retry logic
+		retryablePagerDuty := alert.NewRetryableNotifier(app.clients.PagerDuty, retryPolicy, logger)
+		app.clients.Notifiers = append(app.clients.Notifiers, retryablePagerDuty)
 		app.clients.Syncers = append(app.clients.Syncers, app.clients.PagerDuty)
 
 		app.logger.Get().Info("PagerDuty integration enabled")
