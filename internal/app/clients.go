@@ -29,6 +29,7 @@ func (app *Application) initializeClients() error {
 			app.config.Slack.BotToken,
 			app.config.Slack.ChannelID,
 			app.config.Alerting.SilenceDurations,
+			app.config.Slack.APIURL, // Optional: for E2E testing
 		)
 
 		// Wrap with retry logic
@@ -47,6 +48,7 @@ func (app *Application) initializeClients() error {
 			app.config.PagerDuty.ServiceID,
 			app.config.PagerDuty.FromEmail,
 			app.config.PagerDuty.DefaultSeverity,
+			app.config.PagerDuty.APIURL, // Optional: for E2E testing
 		)
 
 		// Wrap with retry logic

@@ -23,9 +23,17 @@ type Client struct {
 }
 
 // NewClient creates a new Slack client.
-func NewClient(botToken, channelID string, silenceDurations []time.Duration) *Client {
+func NewClient(botToken, channelID string, silenceDurations []time.Duration, apiURL ...string) *Client {
+	var api *slack.Client
+	if len(apiURL) > 0 && apiURL[0] != "" {
+		// Use custom API URL (for E2E testing)
+		api = slack.New(botToken, slack.OptionAPIURL(apiURL[0]))
+	} else {
+		api = slack.New(botToken)
+	}
+
 	return &Client{
-		api:            slack.New(botToken),
+		api:            api,
 		channelID:      channelID,
 		messageBuilder: NewMessageBuilder(silenceDurations),
 	}

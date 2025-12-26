@@ -86,17 +86,19 @@ type SlackConfig struct {
 	SigningSecret string `yaml:"signing_secret"`
 	ChannelID     string `yaml:"channel_id"`
 	AppID         string `yaml:"app_id"`
+	APIURL        string `yaml:"api_url,omitempty"` // Optional: for E2E testing with mock services
 }
 
 // PagerDutyConfig holds PagerDuty integration settings.
 type PagerDutyConfig struct {
-	Enabled        bool   `yaml:"enabled"`
-	APIToken       string `yaml:"api_token"`
-	RoutingKey     string `yaml:"routing_key"`
-	ServiceID      string `yaml:"service_id"`
-	WebhookSecret  string `yaml:"webhook_secret"`
-	FromEmail      string `yaml:"from_email"`
+	Enabled         bool   `yaml:"enabled"`
+	APIToken        string `yaml:"api_token"`
+	RoutingKey      string `yaml:"routing_key"`
+	ServiceID       string `yaml:"service_id"`
+	WebhookSecret   string `yaml:"webhook_secret"`
+	FromEmail       string `yaml:"from_email"`
 	DefaultSeverity string `yaml:"default_severity"`
+	APIURL          string `yaml:"api_url,omitempty"` // Optional: for E2E testing with mock services
 }
 
 // AlertingConfig holds alerting behavior settings.

@@ -1,10 +1,14 @@
 package pagerduty
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"strings"
 
 	"github.com/PagerDuty/go-pagerduty"
@@ -16,15 +20,16 @@ import (
 // Client wraps the PagerDuty API client with domain-specific operations.
 // Implements both alert.Notifier and ack.AckSyncer interfaces.
 type Client struct {
-	eventsClient  *pagerduty.Client
-	routingKey    string
-	serviceID     string
-	fromEmail     string
+	eventsClient    *pagerduty.Client
+	routingKey      string
+	serviceID       string
+	fromEmail       string
 	defaultSeverity string
+	eventsAPIURL    string // Optional: for E2E testing with mock services
 }
 
 // NewClient creates a new PagerDuty client.
-func NewClient(apiToken, routingKey, serviceID, fromEmail, defaultSeverity string) *Client {
+func NewClient(apiToken, routingKey, serviceID, fromEmail, defaultSeverity string, eventsAPIURL ...string) *Client {
 	var client *pagerduty.Client
 	if apiToken != "" {
 		client = pagerduty.NewClient(apiToken)
@@ -34,12 +39,18 @@ func NewClient(apiToken, routingKey, serviceID, fromEmail, defaultSeverity strin
 		defaultSeverity = "warning"
 	}
 
+	var apiURL string
+	if len(eventsAPIURL) > 0 {
+		apiURL = eventsAPIURL[0]
+	}
+
 	return &Client{
 		eventsClient:    client,
 		routingKey:      routingKey,
 		serviceID:       serviceID,
 		fromEmail:       fromEmail,
 		defaultSeverity: defaultSeverity,
+		eventsAPIURL:    apiURL,
 	}
 }
 
@@ -73,7 +84,17 @@ func (c *Client) Notify(ctx context.Context, alert *entity.Alert) (string, error
 	}
 
 	// Send the event
-	resp, err := pagerduty.ManageEventWithContext(ctx, *event)
+	var resp *pagerduty.V2EventResponse
+	var err error
+
+	if c.eventsAPIURL != "" {
+		// Use custom Events API endpoint (for E2E testing)
+		resp, err = c.sendEventHTTP(ctx, event)
+	} else {
+		// Use official PagerDuty library
+		resp, err = pagerduty.ManageEventWithContext(ctx, *event)
+	}
+
 	if err != nil {
 		return "", categorizePagerDutyError(err, "sending pagerduty event")
 	}
@@ -111,9 +132,18 @@ func (c *Client) UpdateMessage(ctx context.Context, dedupKey string, alert *enti
 		}
 	}
 
-	_, err := pagerduty.ManageEventWithContext(ctx, *event)
-	if err != nil {
-		return categorizePagerDutyError(err, "updating pagerduty event")
+	if c.eventsAPIURL != "" {
+		// Use custom Events API endpoint (for E2E testing)
+		_, err := c.sendEventHTTP(ctx, event)
+		if err != nil {
+			return categorizePagerDutyError(err, "updating pagerduty event")
+		}
+	} else {
+		// Use official PagerDuty library
+		_, err := pagerduty.ManageEventWithContext(ctx, *event)
+		if err != nil {
+			return categorizePagerDutyError(err, "updating pagerduty event")
+		}
 	}
 
 	return nil
@@ -261,6 +291,51 @@ func (c *Client) mapSeverity(severity entity.AlertSeverity) string {
 	default:
 		return c.defaultSeverity
 	}
+}
+
+// sendEventHTTP sends an event to a custom PagerDuty Events API endpoint via HTTP.
+// Used for E2E testing with mock services.
+func (c *Client) sendEventHTTP(ctx context.Context, event *pagerduty.V2Event) (*pagerduty.V2EventResponse, error) {
+	// Marshal event to JSON
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling event: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", c.eventsAPIURL+"/v2/enqueue", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	// Check status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("HTTP response with status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var eventResp pagerduty.V2EventResponse
+	if err := json.Unmarshal(body, &eventResp); err != nil {
+		return nil, fmt.Errorf("unmarshaling response: %w, body: %s", err, string(body))
+	}
+
+	return &eventResp, nil
 }
 
 // categorizePagerDutyError wraps PagerDuty API errors as transient or permanent domain errors.
