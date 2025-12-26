@@ -1,20 +1,20 @@
 package handler
 
 import (
-	"log/slog"
 	"net/http"
 
+	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/logger"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/config"
 )
 
 // ReloadHandler handles configuration reload requests.
 type ReloadHandler struct {
 	configManager *config.ConfigManager
-	logger        *slog.Logger
+	logger        logger.Logger
 }
 
 // NewReloadHandler creates a new reload handler.
-func NewReloadHandler(cm *config.ConfigManager, logger *slog.Logger) *ReloadHandler {
+func NewReloadHandler(cm *config.ConfigManager, logger logger.Logger) *ReloadHandler {
 	return &ReloadHandler{
 		configManager: cm,
 		logger:        logger,
