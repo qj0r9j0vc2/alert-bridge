@@ -1,0 +1,131 @@
+version: '3.9'
+
+services:
+  # Prometheus - Metric collection and alerting rules engine
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: e2e-prometheus
+    hostname: prometheus
+    ports:
+      - "${E2E_BASE_PORT:-9000}:9090"
+    volumes:
+      - ./test/e2e-config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./test/e2e-config/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - e2e-test
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Alertmanager - Alert routing and notification management
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: e2e-alertmanager
+    hostname: alertmanager
+    ports:
+      - "${E2E_BASE_PORT_ALERTMANAGER:-9093}:9093"
+    volumes:
+      - ./test/e2e-config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    networks:
+      - e2e-test
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+  # Mock Slack - Test double for Slack Webhook API
+  mock-slack:
+    build:
+      context: ./test/e2e/mocks/slack
+      dockerfile: Dockerfile
+    container_name: e2e-mock-slack
+    hostname: mock-slack
+    ports:
+      - "${E2E_MOCK_SLACK_PORT:-9091}:9091"
+    environment:
+      - PORT=9091
+      - SLACK_MOCK_FAILURE_RATE=${SLACK_MOCK_FAILURE_RATE:-0.0}
+      - SLACK_MOCK_LATENCY_MIN=${SLACK_MOCK_LATENCY_MIN:-10}
+      - SLACK_MOCK_LATENCY_MAX=${SLACK_MOCK_LATENCY_MAX:-500}
+    networks:
+      - e2e-test
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+
+  # Mock PagerDuty - Test double for PagerDuty Events API v2
+  mock-pagerduty:
+    build:
+      context: ./test/e2e/mocks/pagerduty
+      dockerfile: Dockerfile
+    container_name: e2e-mock-pagerduty
+    hostname: mock-pagerduty
+    ports:
+      - "${E2E_MOCK_PAGERDUTY_PORT:-9092}:9092"
+    environment:
+      - PORT=9092
+      - PAGERDUTY_MOCK_FAILURE_RATE=${PAGERDUTY_MOCK_FAILURE_RATE:-0.0}
+    networks:
+      - e2e-test
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9092/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+
+  # Alert-Bridge - System under test
+  alert-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: e2e-alert-bridge
+    hostname: alert-bridge
+    ports:
+      - "${E2E_ALERT_BRIDGE_PORT:-9080}:8080"
+    volumes:
+      - ./test/e2e-config/alert-bridge.yaml:/app/config/config.yaml:ro
+    environment:
+      - CONFIG_PATH=/app/config/config.yaml
+      - LOG_LEVEL=${E2E_LOG_LEVEL:-info}
+    networks:
+      - e2e-test
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+      mock-slack:
+        condition: service_healthy
+      mock-pagerduty:
+        condition: service_healthy
+
+networks:
+  e2e-test:
+    name: e2e-test-network
+    driver: bridge

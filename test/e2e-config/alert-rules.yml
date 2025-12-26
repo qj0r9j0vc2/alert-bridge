@@ -1,0 +1,62 @@
+groups:
+  # E2E Test Alert Rules
+  - name: e2e_test_alerts
+    interval: 5s
+    rules:
+      # Test alert: High CPU usage
+      - alert: HighCPU
+        expr: up{job="test-target"} == 1
+        for: 0s
+        labels:
+          severity: critical
+          component: cpu
+          service: test-service
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is above 90% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://wiki.example.com/runbooks/high-cpu"
+
+      # Test alert: Memory pressure
+      - alert: MemoryPressure
+        expr: up{job="test-target"} == 1
+        for: 0s
+        labels:
+          severity: warning
+          component: memory
+          service: test-service
+        annotations:
+          summary: "Memory pressure detected on {{ $labels.instance }}"
+          description: "Available memory is below 10% on {{ $labels.instance }}"
+
+      # Test alert: Service down
+      - alert: ServiceDown
+        expr: up{job="alert-bridge"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "The service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 30 seconds"
+
+      # Test alert: High request latency
+      - alert: HighRequestLatency
+        expr: up{job="test-target"} == 1
+        for: 0s
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High request latency on {{ $labels.instance }}"
+          description: "95th percentile latency is above 500ms on {{ $labels.instance }}"
+
+      # Test alert for deduplication testing
+      - alert: DuplicateAlert
+        expr: up{job="test-target"} == 1
+        for: 0s
+        labels:
+          severity: warning
+          test_scenario: deduplication
+        annotations:
+          summary: "Test alert for deduplication scenario"
+          description: "This alert is used to test deduplication logic"

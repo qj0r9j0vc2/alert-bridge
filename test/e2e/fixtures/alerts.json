@@ -1,0 +1,139 @@
+{
+  "high_cpu_critical": {
+    "labels": {
+      "alertname": "HighCPU",
+      "severity": "critical",
+      "instance": "server-01",
+      "job": "test-service",
+      "component": "cpu",
+      "service": "test-service"
+    },
+    "annotations": {
+      "summary": "High CPU usage detected on server-01",
+      "description": "CPU usage is above 90% for more than 5 minutes on server-01",
+      "runbook_url": "https://wiki.example.com/runbooks/high-cpu"
+    }
+  },
+  "memory_pressure_warning": {
+    "labels": {
+      "alertname": "MemoryPressure",
+      "severity": "warning",
+      "instance": "server-02",
+      "job": "test-service",
+      "component": "memory",
+      "service": "test-service"
+    },
+    "annotations": {
+      "summary": "Memory pressure detected on server-02",
+      "description": "Available memory is below 10% on server-02"
+    }
+  },
+  "service_down_critical": {
+    "labels": {
+      "alertname": "ServiceDown",
+      "severity": "critical",
+      "instance": "server-03",
+      "job": "alert-bridge",
+      "component": "availability"
+    },
+    "annotations": {
+      "summary": "Service alert-bridge is down",
+      "description": "The service alert-bridge on server-03 has been down for more than 30 seconds"
+    }
+  },
+  "high_latency_warning": {
+    "labels": {
+      "alertname": "HighRequestLatency",
+      "severity": "warning",
+      "instance": "server-01",
+      "job": "test-service",
+      "component": "performance"
+    },
+    "annotations": {
+      "summary": "High request latency on server-01",
+      "description": "95th percentile latency is above 500ms on server-01"
+    }
+  },
+  "duplicate_test_alert": {
+    "labels": {
+      "alertname": "DuplicateAlert",
+      "severity": "warning",
+      "instance": "server-01",
+      "job": "test-target",
+      "test_scenario": "deduplication"
+    },
+    "annotations": {
+      "summary": "Test alert for deduplication scenario",
+      "description": "This alert is used to test deduplication logic"
+    }
+  },
+  "disk_space_critical": {
+    "labels": {
+      "alertname": "DiskSpaceLow",
+      "severity": "critical",
+      "instance": "server-04",
+      "job": "infrastructure",
+      "component": "storage",
+      "service": "database"
+    },
+    "annotations": {
+      "summary": "Disk space critically low on server-04",
+      "description": "Less than 5% disk space remaining on /data partition",
+      "runbook_url": "https://wiki.example.com/runbooks/disk-space"
+    }
+  },
+  "database_connection_error": {
+    "labels": {
+      "alertname": "DatabaseConnectionError",
+      "severity": "critical",
+      "instance": "db-01",
+      "job": "database",
+      "component": "connectivity"
+    },
+    "annotations": {
+      "summary": "Database connection errors detected",
+      "description": "Multiple connection failures to database on db-01"
+    }
+  },
+  "api_rate_limit_warning": {
+    "labels": {
+      "alertname": "APIRateLimitApproaching",
+      "severity": "warning",
+      "instance": "api-gateway",
+      "job": "api",
+      "component": "rate-limiting"
+    },
+    "annotations": {
+      "summary": "API rate limit approaching threshold",
+      "description": "Current request rate is at 80% of the configured limit"
+    }
+  },
+  "ssl_certificate_expiring": {
+    "labels": {
+      "alertname": "SSLCertificateExpiring",
+      "severity": "warning",
+      "instance": "lb-01",
+      "job": "load-balancer",
+      "component": "security",
+      "domain": "example.com"
+    },
+    "annotations": {
+      "summary": "SSL certificate expiring soon",
+      "description": "SSL certificate for example.com expires in 7 days"
+    }
+  },
+  "backup_failed_critical": {
+    "labels": {
+      "alertname": "BackupFailed",
+      "severity": "critical",
+      "instance": "backup-server",
+      "job": "backup",
+      "component": "data-protection"
+    },
+    "annotations": {
+      "summary": "Backup operation failed",
+      "description": "Database backup failed for the second consecutive day",
+      "runbook_url": "https://wiki.example.com/runbooks/backup-failure"
+    }
+  }
+}
