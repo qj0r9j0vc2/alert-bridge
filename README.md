@@ -10,6 +10,9 @@ A unified alert management system that bridges Alertmanager with Slack and Pager
 - **Silence Management**: Create and manage alert silences across platforms
 - **Audit Trail**: Complete history of all acknowledgment events
 - **High Performance**: Sub-millisecond read/write operations
+- **Webhook Security**: Optional HMAC-SHA256 signature verification for Alertmanager webhooks
+- **Hot Reload**: Configuration hot reload without service restart
+- **Clean Architecture**: Modular design with Application struct and factory pattern
 
 ## Quick Start
 
@@ -69,6 +72,9 @@ pagerduty:
   service_id: ${PAGERDUTY_SERVICE_ID}
   webhook_secret: ${PAGERDUTY_WEBHOOK_SECRET}
   from_email: ${PAGERDUTY_FROM_EMAIL}
+
+alertmanager:
+  webhook_secret: ${ALERTMANAGER_WEBHOOK_SECRET}  # Optional: HMAC-SHA256 webhook authentication
 ```
 
 ### Running

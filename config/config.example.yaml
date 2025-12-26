@@ -75,6 +75,17 @@ pagerduty:
   # Default severity for alerts (critical, error, warning, info)
   default_severity: warning
 
+# Alertmanager webhook settings
+alertmanager:
+  # Optional: HMAC-SHA256 webhook signature verification
+  # If set, Alertmanager must send X-Alertmanager-Signature header
+  # Format: v1=<hex_hmac_sha256>
+  # Leave empty to disable authentication (backward compatible)
+  webhook_secret: ${ALERTMANAGER_WEBHOOK_SECRET}
+  # Note: Alertmanager doesn't natively support HMAC signatures.
+  # You may need a reverse proxy or webhook forwarder to add signatures.
+  # Alternatively, run Alert-Bridge on a private network without authentication.
+
 alerting:
   # Time window for deduplicating alerts with same fingerprint
   deduplication_window: 5m

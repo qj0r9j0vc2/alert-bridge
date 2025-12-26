@@ -35,6 +35,32 @@ Alert Bridge follows Clean Architecture principles, separating concerns into dis
          └─────────────────────┘
 ```
 
+## Application Layer (`internal/app/`)
+
+The Application layer manages application lifecycle, dependency injection, and initialization.
+
+**Components:**
+- `app.go` - Application struct and lifecycle management (Start, Shutdown)
+- `bootstrap.go` - Initialization orchestration
+- `config.go` - Configuration loading and management
+- `logger.go` - AtomicLogger for thread-safe hot reload
+- `storage.go` - Storage factory (Memory, SQLite, MySQL)
+- `clients.go` - External client factory (Slack, PagerDuty)
+- `usecases.go` - Use case factory and dependency injection
+- `handlers.go` - HTTP handler factory
+
+**Characteristics:**
+- Centralized dependency management
+- Clean separation of initialization logic
+- Thread-safe configuration hot reload
+- Factory pattern for pluggable implementations
+
+**Benefits:**
+- main.go reduced to ~35 lines
+- Testable application initialization
+- No race conditions during config reload
+- Easy to add new integrations
+
 ## Clean Architecture Layers
 
 ### 1. Domain Layer (`internal/domain/`)
@@ -42,7 +68,7 @@ Alert Bridge follows Clean Architecture principles, separating concerns into dis
 Core business logic with no external dependencies.
 
 **Entities** (`entity/`):
-- `Alert` - Alert data model
+- `Alert` - Alert data model with ExternalReferences for integration IDs
 - `AckEvent` - Acknowledgment event
 - `SilenceMark` - Silence rule
 - `AlertState` - Alert states (firing, acked, resolved)
@@ -315,9 +341,11 @@ slack:
 
 ### Authentication
 
-- Slack: Signature verification
+- Slack: Signature verification (X-Slack-Signature)
 - PagerDuty: Webhook secret validation
-- Alertmanager: No authentication (internal network)
+- Alertmanager: Optional HMAC-SHA256 signature verification (X-Alertmanager-Signature)
+  - Backward compatible (disabled when no secret configured)
+  - Constant-time comparison to prevent timing attacks
 
 ### Data Protection
 

@@ -24,6 +24,7 @@ Receive alerts from Alertmanager.
 ```http
 POST /alertmanager/webhook
 Content-Type: application/json
+X-Alertmanager-Signature: v1=<hex_hmac_sha256>  # Optional: if webhook_secret is configured
 ```
 
 **Request Body:**
@@ -157,6 +158,42 @@ receivers:
       - url: 'http://alert-bridge:8080/alertmanager/webhook'
         send_resolved: true
 ```
+
+#### Optional: Webhook Authentication
+
+If you configure `alertmanager.webhook_secret` in Alert-Bridge, you must include an HMAC-SHA256 signature in the webhook request.
+
+**Configuration:**
+```yaml
+# Alert-Bridge config
+alertmanager:
+  webhook_secret: "your_shared_secret"
+```
+
+**Signature Generation:**
+The signature header format is: `X-Alertmanager-Signature: v1=<hex_hmac_sha256>`
+
+Example (Python):
+```python
+import hmac
+import hashlib
+
+secret = "your_shared_secret"
+body = b'{"alerts": [...]}'  # Raw JSON body
+
+signature = hmac.new(
+    secret.encode(),
+    body,
+    hashlib.sha256
+).hexdigest()
+
+header = f"v1={signature}"
+```
+
+**Note:** Alertmanager doesn't natively support HMAC signatures. You may need:
+- A reverse proxy (nginx, envoy) to add the signature
+- A custom webhook forwarder
+- Run Alert-Bridge without authentication on a private network
 
 ### Slack App
 
