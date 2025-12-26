@@ -7,22 +7,27 @@ import (
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/handler/middleware"
+	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/observability"
 )
 
 // Handlers holds all HTTP handlers.
 type Handlers struct {
-	Alertmanager      *handler.AlertmanagerHandler
-	SlackInteraction  *handler.SlackInteractionHandler
-	SlackEvents       *handler.SlackEventsHandler
-	PagerDutyWebhook  *handler.PagerDutyWebhookHandler
-	Health            *handler.HealthHandler
-	Reload            *handler.ReloadHandler
+	Alertmanager     *handler.AlertmanagerHandler
+	SlackInteraction *handler.SlackInteractionHandler
+	SlackEvents      *handler.SlackEventsHandler
+	PagerDutyWebhook *handler.PagerDutyWebhookHandler
+	Health           *handler.HealthHandler
+	Reload           *handler.ReloadHandler
+	Metrics          *handler.MetricsHandler
 }
 
 // RouterConfig holds optional configuration for the router.
 type RouterConfig struct {
 	AlertmanagerWebhookSecret string
+	SlackSigningSecret        string
+	PagerDutyWebhookSecret    string
 	RequestTimeout            time.Duration
+	Metrics                   *observability.Metrics
 }
 
 // NewRouter creates the HTTP router with all handlers (backward compatible).
@@ -38,6 +43,11 @@ func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterCon
 	mux.Handle("/health", handlers.Health)
 	mux.Handle("/ready", handlers.Health)
 	mux.Handle("/", handlers.Health) // Root path returns health
+
+	// Observability endpoints
+	if handlers.Metrics != nil {
+		mux.Handle("/metrics", handlers.Metrics)
+	}
 
 	// Admin endpoints
 	if handlers.Reload != nil {
@@ -58,15 +68,39 @@ func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterCon
 	}
 
 	if handlers.SlackInteraction != nil {
-		mux.Handle("/webhook/slack/interactions", handlers.SlackInteraction)
+		var h http.Handler = handlers.SlackInteraction
+
+		// Apply Slack authentication middleware
+		if cfg != nil && cfg.SlackSigningSecret != "" {
+			h = middleware.SlackAuth(cfg.SlackSigningSecret, logger)(h)
+			logger.Info("Slack interactions webhook authentication enabled")
+		}
+
+		mux.Handle("/webhook/slack/interactions", h)
 	}
 
 	if handlers.SlackEvents != nil {
-		mux.Handle("/webhook/slack/events", handlers.SlackEvents)
+		var h http.Handler = handlers.SlackEvents
+
+		// Apply Slack authentication middleware
+		if cfg != nil && cfg.SlackSigningSecret != "" {
+			h = middleware.SlackAuth(cfg.SlackSigningSecret, logger)(h)
+			logger.Info("Slack events webhook authentication enabled")
+		}
+
+		mux.Handle("/webhook/slack/events", h)
 	}
 
 	if handlers.PagerDutyWebhook != nil {
-		mux.Handle("/webhook/pagerduty", handlers.PagerDutyWebhook)
+		var h http.Handler = handlers.PagerDutyWebhook
+
+		// Apply PagerDuty authentication middleware
+		if cfg != nil && cfg.PagerDutyWebhookSecret != "" {
+			h = middleware.PagerDutyAuth(cfg.PagerDutyWebhookSecret, logger)(h)
+			logger.Info("PagerDuty webhook authentication enabled")
+		}
+
+		mux.Handle("/webhook/pagerduty", h)
 	}
 
 	// Apply middleware stack
@@ -74,6 +108,12 @@ func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterCon
 	h = middleware.RequestID(h)
 	h = middleware.Logging(logger)(h)
 	h = middleware.Recovery(logger)(h)
+
+	// Apply observability metrics middleware if configured
+	if cfg != nil && cfg.Metrics != nil {
+		h = middleware.Observability(cfg.Metrics)(h)
+		logger.Info("observability metrics middleware enabled")
+	}
 
 	// Apply request timeout if configured
 	if cfg != nil && cfg.RequestTimeout > 0 {

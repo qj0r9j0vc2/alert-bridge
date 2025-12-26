@@ -1,17 +1,11 @@
 package handler
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/slack-go/slack"
 
@@ -21,21 +15,19 @@ import (
 )
 
 // SlackInteractionHandler handles Slack interactive component callbacks.
+// NOTE: Signature verification is handled by middleware.SlackAuth middleware.
 type SlackInteractionHandler struct {
 	handleInteraction *slackUseCase.HandleInteractionUseCase
-	signingSecret     string
 	logger            alert.Logger
 }
 
 // NewSlackInteractionHandler creates a new Slack interaction handler.
 func NewSlackInteractionHandler(
 	handleInteraction *slackUseCase.HandleInteractionUseCase,
-	signingSecret string,
 	logger alert.Logger,
 ) *SlackInteractionHandler {
 	return &SlackInteractionHandler{
 		handleInteraction: handleInteraction,
-		signingSecret:     signingSecret,
 		logger:            logger,
 	}
 }
@@ -44,22 +36,6 @@ func NewSlackInteractionHandler(
 func (h *SlackInteractionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Read body for signature verification
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		h.logger.Error("failed to read request body", "error", err)
-		http.Error(w, "failed to read body", http.StatusBadRequest)
-		return
-	}
-	r.Body = io.NopCloser(bytes.NewBuffer(body))
-
-	// Verify Slack signature
-	if err := h.verifySlackSignature(r.Header, body); err != nil {
-		h.logger.Warn("invalid slack signature", "error", err)
-		http.Error(w, "invalid signature", http.StatusUnauthorized)
 		return
 	}
 
@@ -126,50 +102,16 @@ func (h *SlackInteractionHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-// verifySlackSignature verifies the Slack request signature.
-func (h *SlackInteractionHandler) verifySlackSignature(header http.Header, body []byte) error {
-	timestamp := header.Get("X-Slack-Request-Timestamp")
-	signature := header.Get("X-Slack-Signature")
-
-	if timestamp == "" || signature == "" {
-		return fmt.Errorf("missing timestamp or signature headers")
-	}
-
-	// Check timestamp is recent (within 5 minutes)
-	ts, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid timestamp: %w", err)
-	}
-
-	if abs(time.Now().Unix()-ts) > 60*5 {
-		return fmt.Errorf("timestamp too old")
-	}
-
-	// Compute expected signature
-	sigBaseString := fmt.Sprintf("v0:%s:%s", timestamp, string(body))
-	mac := hmac.New(sha256.New, []byte(h.signingSecret))
-	mac.Write([]byte(sigBaseString))
-	expectedSig := "v0=" + hex.EncodeToString(mac.Sum(nil))
-
-	// Compare signatures
-	if !hmac.Equal([]byte(signature), []byte(expectedSig)) {
-		return fmt.Errorf("signature mismatch")
-	}
-
-	return nil
-}
-
 // SlackEventsHandler handles Slack Events API requests (URL verification, etc.).
+// NOTE: Signature verification is handled by middleware.SlackAuth middleware.
 type SlackEventsHandler struct {
-	signingSecret string
-	logger        alert.Logger
+	logger alert.Logger
 }
 
 // NewSlackEventsHandler creates a new Slack events handler.
-func NewSlackEventsHandler(signingSecret string, logger alert.Logger) *SlackEventsHandler {
+func NewSlackEventsHandler(logger alert.Logger) *SlackEventsHandler {
 	return &SlackEventsHandler{
-		signingSecret: signingSecret,
-		logger:        logger,
+		logger: logger,
 	}
 }
 
@@ -206,14 +148,6 @@ func (h *SlackEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// For other events, acknowledge
 	w.WriteHeader(http.StatusOK)
-}
-
-// abs returns the absolute value of an int64.
-func abs(n int64) int64 {
-	if n < 0 {
-		return -n
-	}
-	return n
 }
 
 // parseMessageID parses a message ID from "channel:timestamp" format.

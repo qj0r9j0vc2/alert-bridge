@@ -11,8 +11,9 @@ func (app *Application) initializeHandlers() error {
 	logger := &slogAdapter{logger: app.logger.Get()}
 
 	app.handlers = &server.Handlers{
-		Health: handler.NewHealthHandler(),
-		Reload: handler.NewReloadHandler(app.configManager, app.logger.Get()),
+		Health:  handler.NewHealthHandler(),
+		Reload:  handler.NewReloadHandler(app.configManager, logger),
+		Metrics: handler.NewMetricsHandler(),
 	}
 
 	// Alertmanager handler
@@ -32,11 +33,9 @@ func (app *Application) initializeHandlers() error {
 		)
 		app.handlers.SlackInteraction = handler.NewSlackInteractionHandler(
 			handleSlackInteractionUC,
-			app.config.Slack.SigningSecret,
 			logger,
 		)
 		app.handlers.SlackEvents = handler.NewSlackEventsHandler(
-			app.config.Slack.SigningSecret,
 			logger,
 		)
 	}
@@ -51,7 +50,6 @@ func (app *Application) initializeHandlers() error {
 		)
 		app.handlers.PagerDutyWebhook = handler.NewPagerDutyWebhookHandler(
 			handlePDWebhookUC,
-			app.config.PagerDuty.WebhookSecret,
 			logger,
 		)
 	}
@@ -62,7 +60,10 @@ func (app *Application) initializeHandlers() error {
 func (app *Application) setupServer() error {
 	routerConfig := &server.RouterConfig{
 		AlertmanagerWebhookSecret: app.config.Alertmanager.WebhookSecret,
+		SlackSigningSecret:        app.config.Slack.SigningSecret,
+		PagerDutyWebhookSecret:    app.config.PagerDuty.WebhookSecret,
 		RequestTimeout:            app.config.Server.RequestTimeout,
+		Metrics:                   app.telemetry.Metrics,
 	}
 	router := server.NewRouterWithConfig(app.handlers, app.logger.Get(), routerConfig)
 	app.server = server.New(app.config.Server, router, app.logger.Get())

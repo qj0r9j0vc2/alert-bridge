@@ -1,13 +1,9 @@
 package handler
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/dto"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/usecase/alert"
@@ -15,21 +11,19 @@ import (
 )
 
 // PagerDutyWebhookHandler handles PagerDuty V3 webhook events.
+// NOTE: Signature verification is handled by middleware.PagerDutyAuth middleware.
 type PagerDutyWebhookHandler struct {
 	handleWebhook *pdUseCase.HandleWebhookUseCase
-	webhookSecret string
 	logger        alert.Logger
 }
 
 // NewPagerDutyWebhookHandler creates a new PagerDuty webhook handler.
 func NewPagerDutyWebhookHandler(
 	handleWebhook *pdUseCase.HandleWebhookUseCase,
-	webhookSecret string,
 	logger alert.Logger,
 ) *PagerDutyWebhookHandler {
 	return &PagerDutyWebhookHandler{
 		handleWebhook: handleWebhook,
-		webhookSecret: webhookSecret,
 		logger:        logger,
 	}
 }
@@ -47,16 +41,6 @@ func (h *PagerDutyWebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		h.logger.Error("failed to read request body", "error", err)
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
-	}
-
-	// Verify webhook signature if secret is configured
-	if h.webhookSecret != "" {
-		signatures := r.Header.Values("X-PagerDuty-Signature")
-		if !h.verifySignature(body, signatures) {
-			h.logger.Warn("invalid PagerDuty webhook signature")
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
-			return
-		}
 	}
 
 	// Parse webhook payload
@@ -143,52 +127,4 @@ func (h *PagerDutyWebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		"processed": processed,
 		"skipped":   skipped,
 	})
-}
-
-// verifySignature verifies the PagerDuty webhook signature.
-// PagerDuty sends multiple signatures with different versions.
-func (h *PagerDutyWebhookHandler) verifySignature(body []byte, signatures []string) bool {
-	if len(signatures) == 0 {
-		return false
-	}
-
-	for _, sig := range signatures {
-		// Parse version and signature
-		// Format: "v1=<signature>"
-		parts := strings.SplitN(sig, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		version := parts[0]
-		signature := parts[1]
-
-		// Only support v1 signatures
-		if version != "v1" {
-			continue
-		}
-
-		// Compute expected signature
-		mac := hmac.New(sha256.New, []byte(h.webhookSecret))
-		mac.Write(body)
-		expectedSig := hex.EncodeToString(mac.Sum(nil))
-
-		// Compare signatures
-		if hmac.Equal([]byte(signature), []byte(expectedSig)) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// extractUserFromAcknowledgers extracts the user from the acknowledgers list.
-func extractUserFromAcknowledgers(acknowledgers []dto.PagerDutyAcknowledgerRef) (userID, userEmail, userName string) {
-	if len(acknowledgers) == 0 {
-		return "", "", ""
-	}
-
-	// Get the most recent acknowledger
-	acker := acknowledgers[len(acknowledgers)-1].Acknowledger
-	return acker.ID, acker.Email, acker.Summary
 }
