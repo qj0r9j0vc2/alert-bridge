@@ -159,15 +159,62 @@ create_worktree() {
     # Create worktree base directory
     mkdir -p "${WORKTREE_BASE}"
 
-    # Create worktree from current branch
-    local current_branch
-    current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+    # Create worktree from current commit (detached HEAD to avoid branch conflicts)
+    local current_commit
+    current_commit=$(git -C "${PROJECT_ROOT}" rev-parse HEAD 2>/dev/null)
 
-    if git worktree add "${WORKTREE_DIR}" "${current_branch}" &>/dev/null; then
+    if [[ -z "${current_commit}" ]]; then
+        log_error "Failed to get current commit hash"
+        exit 1
+    fi
+
+    local current_branch
+    current_branch=$(git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")
+
+    log_verbose "Creating worktree from commit ${current_commit:0:8} (branch: ${current_branch})"
+
+    if git -C "${PROJECT_ROOT}" worktree add --detach "${WORKTREE_DIR}" "${current_commit}" &>/dev/null; then
         log_success "Worktree created at ${WORKTREE_DIR}"
     else
         log_error "Failed to create worktree"
+        log_error "Run 'git worktree list' to check existing worktrees"
         exit 1
+    fi
+
+    # Copy unstaged changes from working directory to worktree
+    # This allows testing current work-in-progress code
+    log_verbose "Syncing working directory changes to worktree..."
+
+    # Get list of modified and untracked files (excluding .git, .worktrees, build artifacts)
+    local changed_files
+    changed_files=$(git -C "${PROJECT_ROOT}" diff --name-only HEAD 2>/dev/null || true)
+
+    local untracked_files
+    untracked_files=$(git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard 2>/dev/null || true)
+
+    # Combine changed and untracked files
+    local all_files
+    all_files=$(printf "%s\n%s" "${changed_files}" "${untracked_files}" | grep -v '^$' || true)
+
+    if [[ -n "${all_files}" ]]; then
+        log_verbose "Copying modified and untracked files to worktree..."
+        echo "${all_files}" | while IFS= read -r file; do
+            # Skip build artifacts and worktrees
+            if [[ "${file}" == "alert-bridge" ]] || [[ "${file}" == .worktrees/* ]]; then
+                continue
+            fi
+
+            if [[ -f "${PROJECT_ROOT}/${file}" ]]; then
+                # Create parent directory in worktree if needed
+                local target_dir
+                target_dir=$(dirname "${WORKTREE_DIR}/${file}")
+                mkdir -p "${target_dir}"
+
+                # Copy file
+                cp "${PROJECT_ROOT}/${file}" "${WORKTREE_DIR}/${file}"
+                log_verbose "  Copied: ${file}"
+            fi
+        done
     fi
 
     # Copy E2E configurations to worktree
@@ -193,7 +240,7 @@ cleanup_worktree() {
         log_verbose "Removing worktree: ${WORKTREE_DIR}"
 
         # Remove worktree
-        if git worktree remove "${WORKTREE_DIR}" --force &>/dev/null; then
+        if git -C "${PROJECT_ROOT}" worktree remove "${WORKTREE_DIR}" --force &>/dev/null; then
             log_success "Worktree removed"
         else
             log_warning "Failed to remove worktree via git, trying manual removal"
@@ -211,10 +258,10 @@ cleanup_worktree() {
 start_docker_services() {
     log_info "Starting Docker services..."
 
-    cd "${WORKTREE_DIR}"
+    cd "${WORKTREE_DIR}/test"
 
     # Build and start services
-    if docker compose -f test/e2e-docker-compose.yml up -d --build; then
+    if docker compose -f e2e-docker-compose.yml up -d --build; then
         log_success "Docker services started"
     else
         log_error "Failed to start Docker services"
@@ -262,10 +309,10 @@ wait_for_services() {
 cleanup_docker_services() {
     log_verbose "Stopping Docker services..."
 
-    cd "${WORKTREE_DIR}" 2>/dev/null || cd "${PROJECT_ROOT}"
+    cd "${WORKTREE_DIR}/test" 2>/dev/null || cd "${PROJECT_ROOT}/test"
 
     # Stop and remove containers
-    if docker compose -f test/e2e-docker-compose.yml down -v --remove-orphans &>/dev/null; then
+    if docker compose -f e2e-docker-compose.yml down -v --remove-orphans &>/dev/null; then
         log_verbose "Docker services stopped"
     else
         log_warning "Failed to stop some Docker services gracefully"
