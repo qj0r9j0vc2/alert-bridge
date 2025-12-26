@@ -186,34 +186,103 @@ func (uc *HandleWebhookUseCase) handleResolved(
 
 // findAlertByIncidentKey finds an alert by PagerDuty incident key.
 // The incident key typically maps to our fingerprint.
+// Uses two-tier lookup strategy: primary by incident ID, fallback to fingerprint.
 func (uc *HandleWebhookUseCase) findAlertByIncidentKey(ctx context.Context, incidentKey, incidentID string) (*entity.Alert, error) {
-	// First, try to find by PagerDuty incident ID using the new interface
+	// First, try to find by PagerDuty incident ID (primary lookup)
 	if incidentID != "" {
+		start := time.Now()
 		alertEntity, err := uc.alertRepo.FindByExternalReference(ctx, "pagerduty", incidentID)
+		duration := time.Since(start)
+
+		// Log query performance
+		if duration > 10*time.Millisecond {
+			uc.logger.Warn("slow database query",
+				"query", "FindByExternalReference",
+				"system", "pagerduty",
+				"duration_ms", duration.Milliseconds(),
+			)
+		}
+
 		if err != nil {
+			uc.logger.Error("error finding alert by incident ID",
+				"incidentID", incidentID,
+				"duration_ms", duration.Milliseconds(),
+				"error", err,
+			)
 			return nil, err
 		}
+
 		if alertEntity != nil {
+			uc.logger.Debug("alert found by incident ID",
+				"alertID", alertEntity.ID,
+				"incidentID", incidentID,
+				"lookup_method", "incident_id",
+				"duration_ms", duration.Milliseconds(),
+			)
 			return alertEntity, nil
 		}
+
+		uc.logger.Debug("no alert found by incident ID, trying fingerprint fallback",
+			"incidentID", incidentID,
+			"duration_ms", duration.Milliseconds(),
+		)
 	}
 
-	// Try to find by fingerprint (incident key)
+	// Fallback: Try to find by fingerprint (incident key)
 	if incidentKey != "" {
+		start := time.Now()
 		alerts, err := uc.alertRepo.FindByFingerprint(ctx, incidentKey)
+		duration := time.Since(start)
+
+		// Log query performance
+		if duration > 10*time.Millisecond {
+			uc.logger.Warn("slow database query",
+				"query", "FindByFingerprint",
+				"fingerprint", incidentKey,
+				"duration_ms", duration.Milliseconds(),
+			)
+		}
+
 		if err != nil {
+			uc.logger.Error("error finding alert by fingerprint",
+				"fingerprint", incidentKey,
+				"duration_ms", duration.Milliseconds(),
+				"error", err,
+			)
 			return nil, err
 		}
-		// Return the most recent firing alert
+
+		// Return the most recent firing alert (preferred)
 		for _, a := range alerts {
 			if a.IsFiring() {
+				uc.logger.Debug("alert found by fingerprint",
+					"alertID", a.ID,
+					"fingerprint", incidentKey,
+					"lookup_method", "fingerprint",
+					"alert_count", len(alerts),
+					"preferred", "firing",
+					"duration_ms", duration.Milliseconds(),
+				)
 				return a, nil
 			}
 		}
+
 		// Return any alert if no firing one found
 		if len(alerts) > 0 {
+			uc.logger.Debug("alert found by fingerprint (no firing alert)",
+				"alertID", alerts[0].ID,
+				"fingerprint", incidentKey,
+				"lookup_method", "fingerprint",
+				"alert_count", len(alerts),
+				"duration_ms", duration.Milliseconds(),
+			)
 			return alerts[0], nil
 		}
+
+		uc.logger.Debug("no alert found by fingerprint",
+			"fingerprint", incidentKey,
+			"duration_ms", duration.Milliseconds(),
+		)
 	}
 
 	return nil, nil
