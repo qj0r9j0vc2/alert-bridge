@@ -1,0 +1,64 @@
+# Alert Bridge Test Configuration
+# Configuration for E2E testing and local development with Socket Mode
+
+server:
+  port: 8081
+  read_timeout: 5s
+  write_timeout: 10s
+  shutdown_timeout: 10s
+
+storage:
+  type: memory  # In-memory for testing (data cleared between runs)
+
+slack:
+  enabled: true
+  # Use test tokens (override with environment variables in actual tests)
+  bot_token: xoxb-test-bot-token
+  signing_secret: test-signing-secret
+  channel_id: C01234567TEST
+  app_id: A01234567TEST
+
+  # Socket Mode enabled for local testing
+  socket_mode:
+    enabled: true
+    app_token: xapp-1-A01234567-test-app-token
+    debug: true                    # Enable debug logging in tests
+    ping_interval: 10s              # Shorter interval for tests
+
+pagerduty:
+  enabled: false                    # Disabled for Slack-only tests
+  api_token: test-pagerduty-token
+  routing_key: test-routing-key
+  service_id: PSVC123TEST
+  webhook_secret: test-webhook-secret
+  from_email: test@example.com
+  default_severity: warning
+
+alertmanager:
+  webhook_secret: test-alertmanager-secret
+
+alerting:
+  deduplication_window: 1m          # Shorter for testing
+  resend_interval: 5m               # Shorter for testing
+  silence_durations:
+    - 5m
+    - 15m
+    - 1h
+
+logging:
+  level: debug                      # Verbose logging for tests
+  format: text                      # Human-readable in tests
+
+observability:
+  metrics:
+    enabled: false                  # Disabled in tests
+
+resilience:
+  circuit_breaker:
+    max_failures: 3                 # Lower threshold for tests
+    timeout: 10s                    # Shorter timeout for tests
+  retry:
+    max_attempts: 2                 # Fewer retries for faster tests
+    initial_delay: 50ms             # Faster retries for tests
+    max_delay: 2s                   # Lower max delay for tests
+    multiplier: 2.0

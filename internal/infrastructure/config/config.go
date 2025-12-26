@@ -35,12 +35,12 @@ type SQLiteConfig struct {
 
 // MySQLConfig holds MySQL-specific settings.
 type MySQLConfig struct {
-	Primary MySQLInstanceConfig `yaml:"primary"`
-	Replica MySQLReplicaConfig  `yaml:"replica"`
-	Pool    MySQLPoolConfig     `yaml:"pool"`
-	Timeout time.Duration       `yaml:"timeout"`
-	ParseTime bool              `yaml:"parse_time"`
-	Charset string              `yaml:"charset"`
+	Primary   MySQLInstanceConfig `yaml:"primary"`
+	Replica   MySQLReplicaConfig  `yaml:"replica"`
+	Pool      MySQLPoolConfig     `yaml:"pool"`
+	Timeout   time.Duration       `yaml:"timeout"`
+	ParseTime bool                `yaml:"parse_time"`
+	Charset   string              `yaml:"charset"`
 }
 
 // MySQLInstanceConfig holds MySQL instance connection settings.
@@ -54,12 +54,12 @@ type MySQLInstanceConfig struct {
 
 // MySQLReplicaConfig holds MySQL replica settings.
 type MySQLReplicaConfig struct {
-	Enabled bool                `yaml:"enabled"`
-	Host    string              `yaml:"host"`
-	Port    int                 `yaml:"port"`
-	Database string             `yaml:"database"`
-	Username string             `yaml:"username"`
-	Password string             `yaml:"password"`
+	Enabled  bool   `yaml:"enabled"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Database string `yaml:"database"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 // MySQLPoolConfig holds MySQL connection pool settings.
@@ -81,12 +81,21 @@ type ServerConfig struct {
 
 // SlackConfig holds Slack integration settings.
 type SlackConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	BotToken      string `yaml:"bot_token"`
-	SigningSecret string `yaml:"signing_secret"`
-	ChannelID     string `yaml:"channel_id"`
-	AppID         string `yaml:"app_id"`
-	APIURL        string `yaml:"api_url,omitempty"` // Optional: for E2E testing with mock services
+	Enabled       bool             `yaml:"enabled"`
+	BotToken      string           `yaml:"bot_token"`
+	SigningSecret string           `yaml:"signing_secret"`
+	ChannelID     string           `yaml:"channel_id"`
+	AppID         string           `yaml:"app_id"`
+	APIURL        string           `yaml:"api_url,omitempty"` // Optional: for E2E testing with mock services
+	SocketMode    SocketModeConfig `yaml:"socket_mode"`
+}
+
+// SocketModeConfig holds Socket Mode settings for local development.
+type SocketModeConfig struct {
+	Enabled      bool          `yaml:"enabled"`
+	AppToken     string        `yaml:"app_token"`
+	Debug        bool          `yaml:"debug"`
+	PingInterval time.Duration `yaml:"ping_interval"`
 }
 
 // PagerDutyConfig holds PagerDuty integration settings.
@@ -177,6 +186,22 @@ func (c *Config) overrideFromEnv() {
 	}
 	if v := os.Getenv("SLACK_APP_ID"); v != "" {
 		c.Slack.AppID = v
+	}
+
+	// Slack Socket Mode
+	if v := os.Getenv("SLACK_SOCKET_MODE_ENABLED"); v != "" {
+		c.Slack.SocketMode.Enabled = strings.ToLower(v) == "true"
+	}
+	if v := os.Getenv("SLACK_SOCKET_MODE_APP_TOKEN"); v != "" {
+		c.Slack.SocketMode.AppToken = v
+	}
+	if v := os.Getenv("SLACK_SOCKET_MODE_DEBUG"); v != "" {
+		c.Slack.SocketMode.Debug = strings.ToLower(v) == "true"
+	}
+	if v := os.Getenv("SLACK_SOCKET_MODE_PING_INTERVAL"); v != "" {
+		if duration, err := time.ParseDuration(v); err == nil {
+			c.Slack.SocketMode.PingInterval = duration
+		}
 	}
 
 	// PagerDuty
@@ -318,6 +343,11 @@ func (c *Config) applyDefaults() {
 			4 * time.Hour,
 			24 * time.Hour,
 		}
+	}
+
+	// Slack Socket Mode defaults
+	if c.Slack.SocketMode.PingInterval == 0 {
+		c.Slack.SocketMode.PingInterval = 30 * time.Second
 	}
 
 	// PagerDuty defaults
