@@ -5,6 +5,8 @@ A unified alert management system that bridges Alertmanager with Slack and Pager
 ## Features
 
 - **Alert Processing**: Receive and process alerts from Alertmanager webhooks
+- **Slack CLI Integration**: Full Slack app integration with Socket Mode (local dev) and HTTP Mode (production)
+- **Slash Commands**: Query alert status directly from Slack with `/alert-status`
 - **Bidirectional Sync**: Synchronize acknowledgments between Slack and PagerDuty
   - **Slack → PagerDuty**: Acknowledge button in Slack updates PagerDuty incident
   - **PagerDuty → Slack**: Acknowledgment/resolution in PagerDuty updates Slack message
@@ -15,10 +17,9 @@ A unified alert management system that bridges Alertmanager with Slack and Pager
 - **Persistent Storage**: SQLite and MySQL-based persistence for alerts, ack events, and silence rules
 - **Silence Management**: Create and manage alert silences across platforms
 - **Audit Trail**: Complete history of all acknowledgment events with source attribution
-- **High Performance**: Sub-millisecond read/write operations with indexed queries
-- **Webhook Security**: Optional HMAC-SHA256 signature verification for Alertmanager webhooks
+- **High Performance**: Sub-millisecond read/write operations with <2s slash command SLA
+- **Webhook Security**: HMAC-SHA256 signature verification for Alertmanager, Slack, and PagerDuty webhooks
 - **Hot Reload**: Configuration hot reload without service restart
-- **Clean Architecture**: Modular design with Application struct and factory pattern
 
 ## Quick Start
 
@@ -146,18 +147,6 @@ For detailed setup instructions, see [specs/feat-pagerduty-slack-ack/quickstart.
 
 ### Development
 - [Development Guide](docs/development.md) - Project structure, testing, contributing
-- [Architecture](docs/architecture.md) - System design and architecture decisions
-
-## Architecture
-
-Alert Bridge follows Clean Architecture principles with four distinct layers:
-
-- **Domain Layer**: Core business entities and repository interfaces
-- **Use Case Layer**: Business logic for alert processing, ack sync, silence management
-- **Infrastructure Layer**: External integrations (Slack, PagerDuty, SQLite, MySQL)
-- **Adapter Layer**: HTTP handlers, request/response mapping
-
-See [Architecture Documentation](docs/architecture.md) for details.
 
 ## Storage Backends
 
