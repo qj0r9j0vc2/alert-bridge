@@ -9,9 +9,16 @@ import (
 
 // Timeout creates middleware that sets a timeout for request processing.
 // If the request exceeds the timeout, it returns 504 Gateway Timeout.
+// Excludes /metrics, /health, and /ready endpoints from timeout.
 func Timeout(timeout time.Duration, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip timeout for observability and health endpoints
+			if r.URL.Path == "/metrics" || r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Create context with timeout
 			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 			defer cancel()
