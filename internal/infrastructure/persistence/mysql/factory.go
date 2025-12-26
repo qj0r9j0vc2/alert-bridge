@@ -10,7 +10,7 @@ import (
 
 // Repositories holds all MySQL repository implementations.
 type Repositories struct {
-	Alert   repository.AlertRepository
+	Alert    repository.AlertRepository
 	AckEvent repository.AckEventRepository
 	Silence  repository.SilenceRepository
 }

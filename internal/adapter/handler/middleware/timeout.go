@@ -67,9 +67,9 @@ func Timeout(timeout time.Duration, logger *slog.Logger) func(http.Handler) http
 // timeoutResponseWriter wraps http.ResponseWriter to track writes
 type timeoutResponseWriter struct {
 	http.ResponseWriter
-	onWrite      func()
-	wroteHeader  bool
-	statusCode   int
+	onWrite     func()
+	wroteHeader bool
+	statusCode  int
 }
 
 func (w *timeoutResponseWriter) WriteHeader(statusCode int) {

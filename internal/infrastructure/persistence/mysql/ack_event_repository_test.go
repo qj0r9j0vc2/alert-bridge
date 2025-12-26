@@ -311,9 +311,9 @@ func TestAckEventRepository_NullableFields(t *testing.T) {
 	event := entity.NewAckEvent(
 		alert.ID,
 		entity.AckSourceSlack,
-		"",  // empty user ID
-		"",  // empty email
-		"",  // empty name
+		"", // empty user ID
+		"", // empty email
+		"", // empty name
 	)
 
 	err := repo.Save(ctx, event)

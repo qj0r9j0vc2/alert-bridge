@@ -30,23 +30,23 @@ type PagerDutyWebhookEvent struct {
 
 // PagerDutyWebhookEventData represents the event data.
 type PagerDutyWebhookEventData struct {
-	ID              string                      `json:"id"`
-	Type            string                      `json:"type"`
-	Self            string                      `json:"self"`
-	HTMLURL         string                      `json:"html_url"`
-	Number          int                         `json:"number"`
-	Status          string                      `json:"status"`
-	IncidentKey     string                      `json:"incident_key"`
-	CreatedAt       time.Time                   `json:"created_at"`
-	Title           string                      `json:"title"`
-	Service         *PagerDutyServiceRef        `json:"service,omitempty"`
-	Assignees       []PagerDutyUserRef          `json:"assignees,omitempty"`
-	Acknowledgers   []PagerDutyAcknowledgerRef  `json:"acknowledgers,omitempty"`
-	LastStatusChangeAt time.Time               `json:"last_status_change_at"`
-	LastStatusChangeBy *PagerDutyUserRef       `json:"last_status_change_by,omitempty"`
-	Priority        *PagerDutyPriorityRef       `json:"priority,omitempty"`
-	Urgency         string                      `json:"urgency"`
-	ResolveReason   string                      `json:"resolve_reason,omitempty"`
+	ID                 string                     `json:"id"`
+	Type               string                     `json:"type"`
+	Self               string                     `json:"self"`
+	HTMLURL            string                     `json:"html_url"`
+	Number             int                        `json:"number"`
+	Status             string                     `json:"status"`
+	IncidentKey        string                     `json:"incident_key"`
+	CreatedAt          time.Time                  `json:"created_at"`
+	Title              string                     `json:"title"`
+	Service            *PagerDutyServiceRef       `json:"service,omitempty"`
+	Assignees          []PagerDutyUserRef         `json:"assignees,omitempty"`
+	Acknowledgers      []PagerDutyAcknowledgerRef `json:"acknowledgers,omitempty"`
+	LastStatusChangeAt time.Time                  `json:"last_status_change_at"`
+	LastStatusChangeBy *PagerDutyUserRef          `json:"last_status_change_by,omitempty"`
+	Priority           *PagerDutyPriorityRef      `json:"priority,omitempty"`
+	Urgency            string                     `json:"urgency"`
+	ResolveReason      string                     `json:"resolve_reason,omitempty"`
 }
 
 // PagerDutyAgent represents the agent that triggered the event.
@@ -84,8 +84,8 @@ type PagerDutyUserRef struct {
 
 // PagerDutyAcknowledgerRef represents an acknowledger reference.
 type PagerDutyAcknowledgerRef struct {
-	Acknowledger PagerDutyUserRef `json:"acknowledger"`
-	AcknowledgedAt time.Time      `json:"acknowledged_at"`
+	Acknowledger   PagerDutyUserRef `json:"acknowledger"`
+	AcknowledgedAt time.Time        `json:"acknowledged_at"`
 }
 
 // PagerDutyPriorityRef represents a priority reference.
@@ -99,13 +99,13 @@ type PagerDutyPriorityRef struct {
 
 // HandlePagerDutyWebhookInput represents the input for handling a PagerDuty webhook.
 type HandlePagerDutyWebhookInput struct {
-	EventType    string
-	IncidentID   string
-	IncidentKey  string // Maps to our alert fingerprint/ID
-	UserEmail    string
-	UserName     string
-	UserID       string
-	Status       string
+	EventType     string
+	IncidentID    string
+	IncidentKey   string // Maps to our alert fingerprint/ID
+	UserEmail     string
+	UserName      string
+	UserID        string
+	Status        string
 	ResolveReason string
 }
 
@@ -119,10 +119,10 @@ type HandlePagerDutyWebhookOutput struct {
 // IsSupportedEventType checks if the event type should be processed.
 func IsSupportedEventType(eventType string) bool {
 	supportedTypes := map[string]bool{
-		"incident.acknowledged": true,
-		"incident.resolved":     true,
+		"incident.acknowledged":   true,
+		"incident.resolved":       true,
 		"incident.unacknowledged": true,
-		"incident.reassigned":   true,
+		"incident.reassigned":     true,
 	}
 	return supportedTypes[eventType]
 }

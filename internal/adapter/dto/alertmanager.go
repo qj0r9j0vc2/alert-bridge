@@ -9,15 +9,15 @@ import (
 // AlertmanagerWebhook represents the webhook payload from Prometheus Alertmanager.
 // See: https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
 type AlertmanagerWebhook struct {
-	Version           string            `json:"version"`
-	GroupKey          string            `json:"groupKey"`
-	TruncatedAlerts   int               `json:"truncatedAlerts"`
-	Status            string            `json:"status"` // "firing" or "resolved"
-	Receiver          string            `json:"receiver"`
-	GroupLabels       map[string]string `json:"groupLabels"`
-	CommonLabels      map[string]string `json:"commonLabels"`
-	CommonAnnotations map[string]string `json:"commonAnnotations"`
-	ExternalURL       string            `json:"externalURL"`
+	Version           string              `json:"version"`
+	GroupKey          string              `json:"groupKey"`
+	TruncatedAlerts   int                 `json:"truncatedAlerts"`
+	Status            string              `json:"status"` // "firing" or "resolved"
+	Receiver          string              `json:"receiver"`
+	GroupLabels       map[string]string   `json:"groupLabels"`
+	CommonLabels      map[string]string   `json:"commonLabels"`
+	CommonAnnotations map[string]string   `json:"commonAnnotations"`
+	ExternalURL       string              `json:"externalURL"`
 	Alerts            []AlertmanagerAlert `json:"alerts"`
 }
 
@@ -34,17 +34,17 @@ type AlertmanagerAlert struct {
 
 // ProcessAlertInput represents the input for processing an alert.
 type ProcessAlertInput struct {
-	Fingerprint  string
-	Name         string
-	Instance     string
-	Target       string
-	Summary      string
-	Description  string
-	Severity     entity.AlertSeverity
-	Status       string // "firing" or "resolved"
-	Labels       map[string]string
-	Annotations  map[string]string
-	FiredAt      time.Time
+	Fingerprint string
+	Name        string
+	Instance    string
+	Target      string
+	Summary     string
+	Description string
+	Severity    entity.AlertSeverity
+	Status      string // "firing" or "resolved"
+	Labels      map[string]string
+	Annotations map[string]string
+	FiredAt     time.Time
 }
 
 // ToProcessAlertInput converts an AlertmanagerAlert to ProcessAlertInput.
