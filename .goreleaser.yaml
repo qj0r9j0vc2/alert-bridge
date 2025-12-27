@@ -49,27 +49,26 @@ checksum:
   name_template: 'checksums.txt'
   algorithm: sha256
 
-# Docker images are built by deploy.yml workflow to avoid GHCR permission issues
-# dockers_v2:
-#   - id: alert-bridge-docker
-#     ids:
-#       - alert-bridge
-#     dockerfile: Dockerfile.goreleaser
-#     images:
-#       - "ghcr.io/{{ tolower .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}"
-#     tags:
-#       - "{{ .Tag }}"
-#       - "latest"
-#     platforms:
-#       - linux/amd64
-#       - linux/arm64
-#     labels:
-#       "org.opencontainers.image.title": "{{ .ProjectName }}"
-#       "org.opencontainers.image.version": "{{ .Version }}"
-#       "org.opencontainers.image.source": "{{ .GitURL }}"
-#       "org.opencontainers.image.revision": "{{ .FullCommit }}"
-#     extra_files:
-#       - config/config.example.yaml
+dockers_v2:
+  - id: alert-bridge-docker
+    ids:
+      - alert-bridge
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - "ghcr.io/qj0r9j0vc2/alert-bridge"
+    tags:
+      - "{{ .Tag }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.title": "{{ .ProjectName }}"
+      "org.opencontainers.image.version": "{{ .Version }}"
+      "org.opencontainers.image.source": "{{ .GitURL }}"
+      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+    extra_files:
+      - config/config.example.yaml
 
 changelog:
   use: github
