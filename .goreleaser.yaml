@@ -54,19 +54,19 @@ dockers_v2:
     ids:
       - alert-bridge
     dockerfile: Dockerfile.goreleaser
-    images:
-      - "ghcr.io/qj0r9j0vc2/alert-bridge"
-    tags:
-      - "{{ .Tag }}"
-      - "latest"
-    platforms:
-      - linux/amd64
-      - linux/arm64
-    labels:
-      "org.opencontainers.image.title": "{{ .ProjectName }}"
-      "org.opencontainers.image.version": "{{ .Version }}"
-      "org.opencontainers.image.source": "{{ .GitURL }}"
-      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--platform=linux/amd64,linux/arm64"
+    image_templates:
+      - "ghcr.io/{{ tolower .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Tag }}"
+      - "ghcr.io/{{ tolower .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
+    skip_push: false
     extra_files:
       - config/config.example.yaml
 
