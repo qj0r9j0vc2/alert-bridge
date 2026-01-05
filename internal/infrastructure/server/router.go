@@ -19,6 +19,7 @@ type Handlers struct {
 	SlackEvents      *handler.SlackEventsHandler
 	PagerDutyWebhook *handler.PagerDutyWebhookHandler
 	Health           *handler.HealthHandler
+	Ready            *handler.ReadyHandler
 	Reload           *handler.ReloadHandler
 	Metrics          *handler.MetricsHandler
 }
@@ -44,10 +45,17 @@ func NewRouter(handlers *Handlers, logger *slog.Logger) http.Handler {
 func NewRouterWithConfig(handlers *Handlers, logger *slog.Logger, cfg *RouterConfig) http.Handler {
 	mux := http.NewServeMux()
 
-	// Health check endpoints
+	// Health check endpoints (liveness)
 	mux.Handle("/health", handlers.Health)
-	mux.Handle("/ready", handlers.Health)
 	mux.Handle("/", handlers.Health) // Root path returns health
+
+	// Readiness check endpoint (checks dependencies)
+	if handlers.Ready != nil {
+		mux.Handle("/ready", handlers.Ready)
+	} else {
+		// Fallback to health handler if Ready handler not configured
+		mux.Handle("/ready", handlers.Health)
+	}
 
 	// Observability endpoints
 	if handlers.Metrics != nil {

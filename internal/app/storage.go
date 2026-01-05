@@ -24,6 +24,7 @@ func (app *Application) initializeStorage() error {
 		app.ackEventRepo = repos.AckEvent
 		app.silenceRepo = repos.Silence
 		app.txManager = db // MySQL DB implements TransactionManager
+		app.dbPinger = db  // MySQL DB implements dbPinger for readiness checks
 		closer = db
 
 		app.logger.Get().Info("MySQL storage initialized",
@@ -47,6 +48,7 @@ func (app *Application) initializeStorage() error {
 		app.ackEventRepo = repos.AckEvent
 		app.silenceRepo = repos.Silence
 		app.txManager = db // SQLite DB implements TransactionManager
+		app.dbPinger = db  // SQLite DB implements dbPinger for readiness checks
 		closer = db
 
 		app.logger.Get().Info("SQLite storage initialized",

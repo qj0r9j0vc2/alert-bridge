@@ -12,8 +12,15 @@ import (
 func (app *Application) initializeHandlers() error {
 	logger := &slogAdapter{logger: app.logger.Get()}
 
+	// Create readiness handler with dependency checkers
+	readyHandler := handler.NewReadyHandler()
+	if app.dbPinger != nil {
+		readyHandler.AddChecker("database", app.dbPinger)
+	}
+
 	app.handlers = &server.Handlers{
 		Health:  handler.NewHealthHandler(),
+		Ready:   readyHandler,
 		Reload:  handler.NewReloadHandler(app.configManager, logger),
 		Metrics: handler.NewMetricsHandler(),
 	}

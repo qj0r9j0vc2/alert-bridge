@@ -11,6 +11,11 @@ import (
 	"github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/server"
 )
 
+// dbPinger provides database connectivity check for readiness probes.
+type dbPinger interface {
+	Ping(ctx context.Context) error
+}
+
 // Application holds all application dependencies and lifecycle
 type Application struct {
 	config        *config.Config
@@ -23,7 +28,8 @@ type Application struct {
 	ackEventRepo repository.AckEventRepository
 	silenceRepo  repository.SilenceRepository
 	txManager    repository.TransactionManager
-	dbCloser     io.Closer // For cleanup
+	dbCloser     io.Closer           // For cleanup
+	dbPinger     dbPinger            // For readiness checks
 
 	// Infrastructure clients
 	clients *Clients

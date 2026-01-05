@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -80,5 +81,78 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+
+// ReadinessChecker provides a way to check if a dependency is ready.
+// Implementations should return nil if ready, or an error describing the issue.
+type ReadinessChecker interface {
+	Ping(ctx context.Context) error
+}
+
+// ReadyHandler handles readiness check requests.
+// Unlike HealthHandler (liveness), this checks actual dependencies.
+type ReadyHandler struct {
+	checkers map[string]ReadinessChecker
+	mu       sync.RWMutex
+}
+
+// NewReadyHandler creates a new readiness handler.
+func NewReadyHandler() *ReadyHandler {
+	return &ReadyHandler{
+		checkers: make(map[string]ReadinessChecker),
+	}
+}
+
+// AddChecker registers a dependency checker with the given name.
+func (h *ReadyHandler) AddChecker(name string, checker ReadinessChecker) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.checkers[name] = checker
+}
+
+// ServeHTTP handles GET /ready
+func (h *ReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	ctx := r.Context()
+	checks := make(map[string]any)
+	allReady := true
+
+	for name, checker := range h.checkers {
+		if err := checker.Ping(ctx); err != nil {
+			checks[name] = map[string]any{
+				"ready": false,
+				"error": err.Error(),
+			}
+			allReady = false
+		} else {
+			checks[name] = map[string]any{
+				"ready": true,
+			}
+		}
+	}
+
+	response := map[string]any{
+		"ready":     allReady,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"checks":    checks,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if allReady {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+
 	json.NewEncoder(w).Encode(response)
 }
