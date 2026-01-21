@@ -68,8 +68,6 @@ func (uc *HandleInteractionUseCase) Execute(ctx context.Context, input dto.Slack
 	switch actionType {
 	case "ack":
 		return uc.handleAck(ctx, alertID, input, userEmail)
-	case "note":
-		return uc.handleNote(ctx, alertID, input, userEmail)
 	case "silence":
 		return uc.handleSilence(ctx, alertID, input, userEmail)
 	default:
@@ -105,26 +103,6 @@ func (uc *HandleInteractionUseCase) handleAck(ctx context.Context, alertID strin
 	return &dto.SlackInteractionOutput{
 		Success: true,
 		Message: fmt.Sprintf("Alert acknowledged by %s", input.UserName),
-	}, nil
-}
-
-// handleNote handles the add note action.
-func (uc *HandleInteractionUseCase) handleNote(ctx context.Context, alertID string, input dto.SlackInteractionInput, userEmail string) (*dto.SlackInteractionOutput, error) {
-	// For now, just post a thread reply indicating note functionality
-	// In a full implementation, this would open a modal for note input
-	messageID := fmt.Sprintf("%s:%s", input.ChannelID, input.MessageTS)
-
-	note := fmt.Sprintf("📝 Note requested by %s", input.UserName)
-	if err := uc.slackClient.PostThreadReply(ctx, messageID, note); err != nil {
-		uc.logger.Error("failed to post thread reply",
-			"messageID", messageID,
-			"error", err,
-		)
-	}
-
-	return &dto.SlackInteractionOutput{
-		Success: true,
-		Message: "Note added",
 	}, nil
 }
 
