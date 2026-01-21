@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
+	slackUseCase "github.com/qj0r9j0vc2/alert-bridge/internal/usecase/slack"
 	"github.com/slack-go/slack"
 )
 
@@ -313,4 +314,92 @@ func (f *SlackAlertFormatter) formatTopInstances(instances map[string]int, limit
 		result += fmt.Sprintf("%d. `%s`: %d alert(s)\n", i+1, ic.name, ic.count)
 	}
 	return result
+}
+
+// FormatSilenceResult formats a SilenceResult into Slack Block Kit blocks.
+func (f *SlackAlertFormatter) FormatSilenceResult(result *slackUseCase.SilenceResult) []slack.Block {
+	blocks := []slack.Block{}
+
+	// Header block
+	headerText := "Silence Management"
+	blocks = append(blocks, slack.NewHeaderBlock(
+		slack.NewTextBlockObject(slack.PlainTextType, headerText, false, false),
+	))
+
+	// Message section
+	blocks = append(blocks, slack.NewSectionBlock(
+		slack.NewTextBlockObject(slack.MarkdownType, result.Message, false, false),
+		nil, nil,
+	))
+
+	blocks = append(blocks, slack.NewDividerBlock())
+
+	// Content based on action result
+	if result.Created != nil {
+		blocks = append(blocks, f.formatSilenceDetails(result.Created, "Created"))
+	}
+
+	if result.Deleted != nil {
+		blocks = append(blocks, f.formatSilenceDetails(result.Deleted, "Deleted"))
+	}
+
+	if len(result.Silences) > 0 {
+		for i, silence := range result.Silences {
+			if i >= 10 {
+				blocks = append(blocks, slack.NewSectionBlock(
+					slack.NewTextBlockObject(slack.MarkdownType,
+						fmt.Sprintf("_Showing 10 of %d silences_", len(result.Silences)),
+						false, false),
+					nil, nil,
+				))
+				break
+			}
+			blocks = append(blocks, f.formatSilenceDetails(silence, ""))
+			if i < len(result.Silences)-1 && i < 9 {
+				blocks = append(blocks, slack.NewDividerBlock())
+			}
+		}
+	} else if result.Created == nil && result.Deleted == nil {
+		blocks = append(blocks, slack.NewSectionBlock(
+			slack.NewTextBlockObject(slack.MarkdownType, "_No active silences_", false, false),
+			nil, nil,
+		))
+	}
+
+	// Footer context
+	footerText := fmt.Sprintf("Updated: %s", time.Now().Format("Jan 02, 2006 at 3:04 PM"))
+	blocks = append(blocks, slack.NewContextBlock(
+		"",
+		slack.NewTextBlockObject(slack.MarkdownType, footerText, false, false),
+	))
+
+	return blocks
+}
+
+// formatSilenceDetails formats a single silence into a Slack section block.
+func (f *SlackAlertFormatter) formatSilenceDetails(silence *entity.SilenceMark, prefix string) *slack.SectionBlock {
+	text := ""
+	if prefix != "" {
+		text = fmt.Sprintf("*%s Silence*\n", prefix)
+	}
+
+	text += fmt.Sprintf("ID: `%s`\n", silence.ID)
+
+	if silence.Reason != "" {
+		text += fmt.Sprintf("Reason: %s\n", silence.Reason)
+	}
+
+	// Duration info
+	remaining := silence.RemainingDuration()
+	if remaining > 0 {
+		text += fmt.Sprintf("Remaining: %s\n", f.formatDuration(remaining))
+	}
+
+	text += fmt.Sprintf("Expires: %s\n", silence.EndAt.Format("Jan 02, 2006 at 3:04 PM"))
+	text += fmt.Sprintf("Created by: %s", silence.CreatedBy)
+
+	return slack.NewSectionBlock(
+		slack.NewTextBlockObject(slack.MarkdownType, text, false, false),
+		nil, nil,
+	)
 }

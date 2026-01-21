@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+// SilenceAction represents the action to perform on silences.
+type SilenceAction string
+
+const (
+	SilenceActionCreate    SilenceAction = "create"
+	SilenceActionList      SilenceAction = "list"
+	SilenceActionDelete    SilenceAction = "delete"
+	SilenceActionOpenModal SilenceAction = "open_modal" // Opens the create silence modal
+	SilenceActionFromModal SilenceAction = "from_modal" // Created from modal submission
+)
+
+// SilenceRequest represents a request to manage silences.
+type SilenceRequest struct {
+	Action    SilenceAction
+	Duration  time.Duration
+	Reason    string
+	SilenceID string            // For delete action
+	Matchers  map[string]string // Label matchers (key=value pairs)
+	UserID    string
+	UserName  string
+	TriggerID string // For opening modals
+}
+
 // SlackCommandDTO represents a parsed Slack slash command.
 type SlackCommandDTO struct {
 	Command     string // The command name (e.g., "/alert-status")
@@ -110,4 +133,76 @@ func (dto *SlackCommandDTO) PeriodDescription() string {
 	}
 	weeks := days / 7
 	return "last " + strconv.Itoa(weeks) + " week(s)"
+}
+
+// ParseSilenceRequest parses the command text for /silence command.
+// Usage: /silence [create|list|delete] [options]
+// Examples:
+//   - /silence create               - Opens modal to create a silence
+//   - /silence list                 - List all active silences
+//   - /silence delete <id>          - Delete a silence by ID
+func (d *SlackCommandDTO) ParseSilenceRequest() *SilenceRequest {
+	parts := strings.Fields(d.Text)
+
+	req := &SilenceRequest{
+		UserID:    d.UserID,
+		UserName:  d.UserName,
+		TriggerID: d.TriggerID,
+		Action:    SilenceActionList, // Default action
+		Duration:  1 * time.Hour,     // Default duration
+		Matchers:  make(map[string]string),
+	}
+
+	if len(parts) == 0 {
+		return req
+	}
+
+	// Parse action
+	action := strings.ToLower(parts[0])
+	switch action {
+	case "create":
+		// Open modal for creating silence with label selection
+		req.Action = SilenceActionOpenModal
+	case "list":
+		req.Action = SilenceActionList
+	case "delete":
+		req.Action = SilenceActionDelete
+		if len(parts) >= 2 {
+			req.SilenceID = parts[1]
+		}
+	default:
+		// If first part is a duration, open modal with pre-filled duration
+		if dur := parseDuration(action); dur > 0 {
+			req.Action = SilenceActionOpenModal
+			req.Duration = dur
+		}
+	}
+
+	return req
+}
+
+// parseDuration parses duration strings like "1h", "30m", "7d", "1w"
+func parseDuration(s string) time.Duration {
+	matches := periodRegex.FindStringSubmatch(strings.ToLower(s))
+	if matches == nil {
+		return 0
+	}
+
+	value, err := strconv.Atoi(matches[1])
+	if err != nil || value <= 0 {
+		return 0
+	}
+
+	switch matches[2] {
+	case "m":
+		return time.Duration(value) * time.Minute
+	case "h":
+		return time.Duration(value) * time.Hour
+	case "d":
+		return time.Duration(value) * 24 * time.Hour
+	case "w":
+		return time.Duration(value) * 7 * 24 * time.Hour
+	default:
+		return 0
+	}
 }

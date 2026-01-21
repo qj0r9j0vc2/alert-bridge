@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	slackLib "github.com/slack-go/slack"
+
 	"github.com/qj0r9j0vc2/alert-bridge/internal/adapter/dto"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/repository"
+	slackInfra "github.com/qj0r9j0vc2/alert-bridge/internal/infrastructure/slack"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/usecase/ack"
 	"github.com/qj0r9j0vc2/alert-bridge/internal/usecase/alert"
 )
@@ -214,4 +217,97 @@ func formatDuration(d time.Duration) string {
 		return "1 day"
 	}
 	return fmt.Sprintf("%d days", days)
+}
+
+// HandleModalSubmission processes modal form submissions.
+func (uc *HandleInteractionUseCase) HandleModalSubmission(ctx context.Context, payload *slackLib.InteractionCallback) (*dto.SlackInteractionOutput, error) {
+	callbackID := payload.View.CallbackID
+
+	switch callbackID {
+	case slackInfra.SilenceModalCallbackID:
+		return uc.handleSilenceModalSubmission(ctx, payload)
+	default:
+		return nil, fmt.Errorf("unknown modal callback: %s", callbackID)
+	}
+}
+
+// handleSilenceModalSubmission processes the silence creation modal submission.
+func (uc *HandleInteractionUseCase) handleSilenceModalSubmission(ctx context.Context, payload *slackLib.InteractionCallback) (*dto.SlackInteractionOutput, error) {
+	values := payload.View.State.Values
+
+	// Parse duration
+	durationValue := values[slackInfra.SilenceBlockDuration][slackInfra.SilenceActionDuration].SelectedOption.Value
+	duration, err := time.ParseDuration(durationValue)
+	if err != nil {
+		return nil, fmt.Errorf("invalid duration: %s", durationValue)
+	}
+
+	// Parse reason (optional)
+	reason := ""
+	if reasonBlock, ok := values[slackInfra.SilenceBlockReason]; ok {
+		if reasonAction, ok := reasonBlock[slackInfra.SilenceActionReason]; ok {
+			reason = reasonAction.Value
+		}
+	}
+
+	// Parse matchers from multi-select blocks
+	matchers := make(map[string]string)
+	for blockID, blockValues := range values {
+		if strings.HasPrefix(blockID, slackInfra.SilenceBlockMatchers+"_") {
+			labelKey := strings.TrimPrefix(blockID, slackInfra.SilenceBlockMatchers+"_")
+			actionID := slackInfra.SilenceActionMatchers + "_" + labelKey
+			if action, ok := blockValues[actionID]; ok {
+				for _, opt := range action.SelectedOptions {
+					// Value format is "key=value"
+					parts := strings.SplitN(opt.Value, "=", 2)
+					if len(parts) == 2 {
+						matchers[parts[0]] = parts[1]
+					}
+				}
+			}
+		}
+	}
+
+	// Create silence
+	silence, err := entity.NewSilenceMark(
+		duration,
+		payload.User.Name,
+		"", // email not available from modal
+		entity.AckSourceSlack,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create silence: %w", err)
+	}
+
+	if reason != "" {
+		silence.WithReason(reason)
+	}
+
+	if len(matchers) > 0 {
+		silence.WithMatchers(matchers)
+	}
+
+	// Save silence
+	if err := uc.silenceRepo.Save(ctx, silence); err != nil {
+		return nil, fmt.Errorf("failed to save silence: %w", err)
+	}
+
+	msg := fmt.Sprintf("Created silence for %s", formatDuration(duration))
+	if len(matchers) > 0 {
+		msg += fmt.Sprintf(" with %d matcher(s)", len(matchers))
+	}
+
+	uc.logger.Info("silence created from modal",
+		"silenceID", silence.ID,
+		"duration", duration.String(),
+		"matcherCount", len(matchers),
+		"createdBy", payload.User.Name,
+	)
+
+	return &dto.SlackInteractionOutput{
+		Success:      true,
+		Message:      msg,
+		SilenceID:    silence.ID,
+		SilenceEndAt: &silence.EndAt,
+	}, nil
 }

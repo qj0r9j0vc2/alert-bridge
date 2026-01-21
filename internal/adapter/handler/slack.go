@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,7 +62,64 @@ func (h *SlackInteractionHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 	ctx := r.Context()
 
-	// Handle block actions
+	// Route based on interaction type
+	switch payload.Type {
+	case slack.InteractionTypeViewSubmission:
+		h.handleViewSubmission(ctx, w, &payload)
+		return
+	case slack.InteractionTypeBlockActions:
+		h.handleBlockActions(ctx, &payload)
+	default:
+		h.logger.Warn("unhandled interaction type", "type", payload.Type)
+	}
+
+	// Acknowledge the interaction immediately
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleViewSubmission handles modal form submissions.
+func (h *SlackInteractionHandler) handleViewSubmission(ctx context.Context, w http.ResponseWriter, payload *slack.InteractionCallback) {
+	callbackID := payload.View.CallbackID
+
+	h.logger.Info("handling view submission",
+		"callbackID", callbackID,
+		"userID", payload.User.ID,
+	)
+
+	output, err := h.handleInteraction.HandleModalSubmission(ctx, payload)
+	if err != nil {
+		h.logger.Error("failed to handle modal submission",
+			"callbackID", callbackID,
+			"userID", payload.User.ID,
+			"error", err,
+		)
+
+		// Return validation error to Slack
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		errorResponse := map[string]interface{}{
+			"response_action": "errors",
+			"errors": map[string]string{
+				"silence_duration": err.Error(),
+			},
+		}
+		json.NewEncoder(w).Encode(errorResponse)
+		return
+	}
+
+	h.logger.Info("modal submission handled",
+		"callbackID", callbackID,
+		"userID", payload.User.ID,
+		"success", output.Success,
+		"message", output.Message,
+	)
+
+	// Acknowledge successful submission (close modal)
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleBlockActions handles button clicks and other block actions.
+func (h *SlackInteractionHandler) handleBlockActions(ctx context.Context, payload *slack.InteractionCallback) {
 	for _, action := range payload.ActionCallback.BlockActions {
 		input := dto.SlackInteractionInput{
 			ActionID:    action.ActionID,
@@ -97,9 +155,6 @@ func (h *SlackInteractionHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 			"message", output.Message,
 		)
 	}
-
-	// Acknowledge the interaction immediately
-	w.WriteHeader(http.StatusOK)
 }
 
 // SlackEventsHandler handles Slack Events API requests (URL verification, etc.).

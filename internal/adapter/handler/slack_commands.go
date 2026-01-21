@@ -44,12 +44,21 @@ var slackCommands = []SlackCommandInfo{
 		ShouldEscape:     false,
 		AutocompleteHint: "Specify time period for summary",
 	},
+	{
+		Command:          "/silence",
+		Description:      "Create or manage alert silences",
+		UsageHint:        "[create|list|delete] [options]",
+		RequestURL:       "/webhook/slack/commands",
+		ShouldEscape:     false,
+		AutocompleteHint: "create 1h, list, delete <id>",
+	},
 }
 
 // SlackCommandsHandler handles Slack slash command webhooks (HTTP Mode).
 type SlackCommandsHandler struct {
 	queryAlertStatus *slackUseCase.QueryAlertStatusUseCase
 	summarizeAlerts  *slackUseCase.SummarizeAlertsUseCase
+	manageSilence    *slackUseCase.ManageSilenceUseCase
 	formatter        *presenter.SlackAlertFormatter
 	logger           *slog.Logger
 }
@@ -58,11 +67,13 @@ type SlackCommandsHandler struct {
 func NewSlackCommandsHandler(
 	queryAlertStatus *slackUseCase.QueryAlertStatusUseCase,
 	summarizeAlerts *slackUseCase.SummarizeAlertsUseCase,
+	manageSilence *slackUseCase.ManageSilenceUseCase,
 	logger *slog.Logger,
 ) *SlackCommandsHandler {
 	return &SlackCommandsHandler{
 		queryAlertStatus: queryAlertStatus,
 		summarizeAlerts:  summarizeAlerts,
+		manageSilence:    manageSilence,
 		formatter:        presenter.NewSlackAlertFormatter(),
 		logger:           logger,
 	}
@@ -159,6 +170,8 @@ func (h *SlackCommandsHandler) processCommand(ctx context.Context, cmd *dto.Slac
 		h.handleAlertStatus(ctx, cmd, startTime)
 	case "/summary":
 		h.handleSummary(ctx, cmd, startTime)
+	case "/silence":
+		h.handleSilence(ctx, cmd, startTime)
 	default:
 		h.logger.Warn("unhandled slash command", "command", cmd.Command)
 		h.sendDelayedResponse(cmd.ResponseURL, dto.NewEphemeralResponse("Unknown command"))
@@ -246,6 +259,57 @@ func (h *SlackCommandsHandler) handleSummary(ctx context.Context, cmd *dto.Slack
 		"user_id", cmd.UserID,
 		"period", periodDesc,
 		"total_alerts", summary.TotalAlerts,
+		"response_time_ms", elapsed.Milliseconds(),
+		"sla_met", elapsed < 2*time.Second)
+}
+
+// handleSilence handles /silence command.
+// Usage: /silence [create|list|delete] [options]
+// Examples:
+//   - /silence create             - Opens modal to create a silence with label selection
+//   - /silence list               - List all active silences
+//   - /silence delete <id>        - Delete a silence by ID
+func (h *SlackCommandsHandler) handleSilence(ctx context.Context, cmd *dto.SlackCommandDTO, startTime time.Time) {
+	// Parse silence request from command text
+	req := cmd.ParseSilenceRequest()
+
+	// Execute silence action
+	result, err := h.manageSilence.Execute(ctx, req)
+	if err != nil {
+		h.logger.Error("failed to manage silence",
+			"error", err.Error(),
+			"user_id", cmd.UserID,
+			"action", req.Action)
+
+		h.sendDelayedResponse(cmd.ResponseURL,
+			dto.NewEphemeralResponse(fmt.Sprintf("Failed to %s silence: %v", req.Action, err)))
+		return
+	}
+
+	// If a modal was opened, don't send a message response
+	if result.OpenedModal {
+		h.logger.Info("silence modal opened",
+			"command", cmd.Command,
+			"user_id", cmd.UserID,
+			"response_time_ms", time.Since(startTime).Milliseconds())
+		return
+	}
+
+	// Format response as Slack blocks
+	blocks := h.formatter.FormatSilenceResult(result)
+
+	// Create response
+	response := dto.NewEphemeralWithBlocks(result.Message, blocks)
+
+	// Send delayed response
+	h.sendDelayedResponse(cmd.ResponseURL, response)
+
+	// Log response time (SLA: <2s)
+	elapsed := time.Since(startTime)
+	h.logger.Info("slash command processed",
+		"command", cmd.Command,
+		"user_id", cmd.UserID,
+		"action", req.Action,
 		"response_time_ms", elapsed.Milliseconds(),
 		"sla_met", elapsed < 2*time.Second)
 }

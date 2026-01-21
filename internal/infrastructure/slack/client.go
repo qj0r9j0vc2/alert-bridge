@@ -150,6 +150,65 @@ func (c *Client) AddReaction(ctx context.Context, messageID, emoji string) error
 	return nil
 }
 
+// OpenModal opens a modal view using the trigger ID from a slash command or interaction.
+func (c *Client) OpenModal(ctx context.Context, triggerID string, view slack.ModalViewRequest) error {
+	_, err := c.api.OpenViewContext(ctx, triggerID, view)
+	if err != nil {
+		return categorizeSlackError(err, "opening modal")
+	}
+	return nil
+}
+
+// GetActiveAlertLabels retrieves unique label keys and values from active alerts.
+// This is used to populate label autocomplete in the silence modal.
+func (c *Client) GetActiveAlertLabels(ctx context.Context, alertRepo interface {
+	GetActiveAlerts(ctx context.Context, severity string) ([]*entity.Alert, error)
+}) (map[string][]string, error) {
+	alerts, err := alertRepo.GetActiveAlerts(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	labels := make(map[string]map[string]bool)
+	for _, alert := range alerts {
+		for key, value := range alert.Labels {
+			if labels[key] == nil {
+				labels[key] = make(map[string]bool)
+			}
+			labels[key][value] = true
+		}
+		// Add common alert fields as pseudo-labels
+		if alert.Name != "" {
+			if labels["alertname"] == nil {
+				labels["alertname"] = make(map[string]bool)
+			}
+			labels["alertname"][alert.Name] = true
+		}
+		if alert.Instance != "" {
+			if labels["instance"] == nil {
+				labels["instance"] = make(map[string]bool)
+			}
+			labels["instance"][alert.Instance] = true
+		}
+		if string(alert.Severity) != "" {
+			if labels["severity"] == nil {
+				labels["severity"] = make(map[string]bool)
+			}
+			labels["severity"][string(alert.Severity)] = true
+		}
+	}
+
+	// Convert to slice format
+	result := make(map[string][]string)
+	for key, values := range labels {
+		for value := range values {
+			result[key] = append(result[key], value)
+		}
+	}
+
+	return result, nil
+}
+
 // categorizeSlackError wraps Slack API errors as transient or permanent domain errors.
 func categorizeSlackError(err error, operation string) error {
 	if err == nil {

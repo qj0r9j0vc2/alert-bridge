@@ -94,6 +94,17 @@ func (s *SilenceMark) WithLabel(key, value string) *SilenceMark {
 	return s
 }
 
+// WithMatchers adds multiple label matchers to the silence.
+func (s *SilenceMark) WithMatchers(matchers map[string]string) *SilenceMark {
+	if s.Labels == nil {
+		s.Labels = make(map[string]string)
+	}
+	for key, value := range matchers {
+		s.Labels[key] = value
+	}
+	return s
+}
+
 // WithReason sets the reason for the silence.
 func (s *SilenceMark) WithReason(reason string) *SilenceMark {
 	s.Reason = reason
