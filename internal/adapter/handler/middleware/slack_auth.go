@@ -19,6 +19,13 @@ import (
 func SlackAuth(signingSecret string, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip auth for GET requests (e.g., listing available commands)
+			// Slack only sends POST requests for slash commands
+			if r.Method == http.MethodGet {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Skip auth if no secret configured
 			if signingSecret == "" {
 				logger.Warn("slack signing secret not configured, skipping signature verification")
