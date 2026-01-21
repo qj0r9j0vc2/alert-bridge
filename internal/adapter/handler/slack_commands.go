@@ -88,8 +88,15 @@ func (h *SlackCommandsHandler) HandleSlashCommand(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Process command asynchronously and send delayed response
-	go h.processCommand(r.Context(), cmdDTO, startTime)
+	// Process command asynchronously and send delayed response.
+	// Use a new background context instead of r.Context() because the request context
+	// is cancelled when the HTTP response is sent, which would cancel ongoing database queries.
+	// Slack allows up to 30 minutes for delayed responses via response_url.
+	asyncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	go func() {
+		defer cancel()
+		h.processCommand(asyncCtx, cmdDTO, startTime)
+	}()
 }
 
 // processCommand processes the command and sends delayed response via response_url.
