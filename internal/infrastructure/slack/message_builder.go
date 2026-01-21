@@ -10,6 +10,15 @@ import (
 	"github.com/qj0r9j0vc2/alert-bridge/internal/domain/entity"
 )
 
+// Severity color codes for visual distinction
+const (
+	colorCritical = "#E01E5A" // Red
+	colorWarning  = "#ECB22E" // Yellow/Orange
+	colorInfo     = "#36C5F0" // Blue
+	colorResolved = "#2EB67D" // Green
+	colorAcked    = "#9B59B6" // Purple
+)
+
 // MessageBuilder constructs Slack Block Kit messages for alerts.
 type MessageBuilder struct {
 	silenceDurations []time.Duration
@@ -32,90 +41,160 @@ func NewMessageBuilder(silenceDurations []time.Duration) *MessageBuilder {
 
 // BuildAlertMessage creates a Block Kit message for an alert.
 func (b *MessageBuilder) BuildAlertMessage(alert *entity.Alert) []slack.Block {
+	return b.buildMessage(alert, true, true)
+}
+
+// BuildAckedMessage creates a message for an acknowledged alert with silence button still available.
+func (b *MessageBuilder) BuildAckedMessage(alert *entity.Alert) []slack.Block {
+	return b.buildMessage(alert, false, true)
+}
+
+// BuildResolvedMessage creates a message for a resolved alert (no buttons).
+func (b *MessageBuilder) BuildResolvedMessage(alert *entity.Alert) []slack.Block {
+	return b.buildMessage(alert, false, false)
+}
+
+// buildMessage creates a Block Kit message with configurable button options.
+func (b *MessageBuilder) buildMessage(alert *entity.Alert, showAckButton, showSilenceButton bool) []slack.Block {
 	var blocks []slack.Block
 
-	// Header with status emoji and alert name
-	headerText := b.buildHeader(alert)
+	// Status banner with emoji and severity indicator
+	blocks = append(blocks, b.buildStatusBanner(alert))
+
+	// Alert name as header
 	blocks = append(blocks, slack.NewHeaderBlock(
-		slack.NewTextBlockObject(slack.PlainTextType, headerText, true, false),
+		slack.NewTextBlockObject(slack.PlainTextType, alert.Name, true, false),
 	))
 
-	// Alert details section
-	blocks = append(blocks, b.buildDetailsSection(alert))
-
-	// Summary section
+	// Summary section (if available)
 	if alert.Summary != "" {
 		blocks = append(blocks, slack.NewSectionBlock(
-			slack.NewTextBlockObject(slack.MarkdownType, alert.Summary, false, false),
+			slack.NewTextBlockObject(slack.MarkdownType, fmt.Sprintf("_%s_", alert.Summary), false, false),
 			nil, nil,
 		))
 	}
 
-	// Divider
+	// Alert details in a compact format
+	blocks = append(blocks, b.buildDetailsSection(alert))
+
+	// Thin divider
 	blocks = append(blocks, slack.NewDividerBlock())
 
-	// Status context block
-	blocks = append(blocks, b.buildStatusContext(alert))
+	// Timeline context
+	blocks = append(blocks, b.buildTimelineContext(alert))
 
-	// Action buttons (only if alert is firing and not acknowledged)
-	if alert.IsActive() {
-		blocks = append(blocks, b.buildActionButtons(alert.ID))
+	// Action buttons (configurable)
+	if showAckButton || showSilenceButton {
+		if actionBlock := b.buildActionButtons(alert.ID, showAckButton, showSilenceButton); actionBlock != nil {
+			blocks = append(blocks, actionBlock)
+		}
 	}
 
 	return blocks
 }
 
-// buildHeader creates the header text with appropriate status prefix.
-func (b *MessageBuilder) buildHeader(alert *entity.Alert) string {
-	var prefix string
-	switch {
-	case alert.IsResolved():
-		prefix = "[RESOLVED]"
-	case alert.IsAcked():
-		prefix = "[ACKED]"
-	case alert.Severity == entity.SeverityCritical:
-		prefix = "[CRITICAL]"
-	case alert.Severity == entity.SeverityWarning:
-		prefix = "[WARNING]"
-	default:
-		prefix = "[INFO]"
-	}
+// buildStatusBanner creates a visual status banner at the top.
+func (b *MessageBuilder) buildStatusBanner(alert *entity.Alert) *slack.SectionBlock {
+	emoji, statusText, color := b.getStatusInfo(alert)
 
-	return fmt.Sprintf("%s %s", prefix, alert.Name)
+	// Create a visually distinct status line
+	statusLine := fmt.Sprintf("%s  *%s*  %s", emoji, statusText, b.getSeverityBadge(alert))
+
+	return slack.NewSectionBlock(
+		slack.NewTextBlockObject(slack.MarkdownType, statusLine, false, false),
+		nil,
+		slack.NewAccessory(
+			slack.NewImageBlockElement(
+				b.getStatusIconURL(color),
+				statusText,
+			),
+		),
+	)
 }
 
-// buildDetailsSection creates the details section with fields.
+// getStatusInfo returns emoji, text, and color for the alert status.
+func (b *MessageBuilder) getStatusInfo(alert *entity.Alert) (emoji, text, color string) {
+	switch {
+	case alert.IsResolved():
+		return "✅", "RESOLVED", colorResolved
+	case alert.IsAcked():
+		return "👁️", "ACKNOWLEDGED", colorAcked
+	case alert.Severity == entity.SeverityCritical:
+		return "🚨", "CRITICAL", colorCritical
+	case alert.Severity == entity.SeverityWarning:
+		return "⚠️", "WARNING", colorWarning
+	default:
+		return "ℹ️", "INFO", colorInfo
+	}
+}
+
+// getSeverityBadge returns a formatted severity badge.
+func (b *MessageBuilder) getSeverityBadge(alert *entity.Alert) string {
+	severity := strings.ToUpper(string(alert.Severity))
+	switch alert.Severity {
+	case entity.SeverityCritical:
+		return fmt.Sprintf("`🔴 %s`", severity)
+	case entity.SeverityWarning:
+		return fmt.Sprintf("`🟡 %s`", severity)
+	default:
+		return fmt.Sprintf("`🔵 %s`", severity)
+	}
+}
+
+// getStatusIconURL returns a placeholder for status-colored icon.
+// In production, this could link to actual hosted status icons.
+func (b *MessageBuilder) getStatusIconURL(color string) string {
+	// Use a simple colored square placeholder
+	// You can replace this with actual hosted icons
+	return "https://via.placeholder.com/48/" + strings.TrimPrefix(color, "#") + "/FFFFFF?text=+"
+}
+
+// buildDetailsSection creates the details section with fields in a clean layout.
 func (b *MessageBuilder) buildDetailsSection(alert *entity.Alert) *slack.SectionBlock {
-	fields := []*slack.TextBlockObject{
-		slack.NewTextBlockObject(slack.MarkdownType,
-			fmt.Sprintf("*Instance:*\n%s", b.valueOrNA(alert.Instance)), false, false),
-		slack.NewTextBlockObject(slack.MarkdownType,
-			fmt.Sprintf("*Severity:*\n%s", strings.Title(string(alert.Severity))), false, false),
+	var fields []*slack.TextBlockObject
+
+	// Instance
+	if alert.Instance != "" {
+		fields = append(fields,
+			slack.NewTextBlockObject(slack.MarkdownType,
+				fmt.Sprintf("*🖥️ Instance*\n`%s`", alert.Instance), false, false))
 	}
 
+	// Target
 	if alert.Target != "" {
 		fields = append(fields,
 			slack.NewTextBlockObject(slack.MarkdownType,
-				fmt.Sprintf("*Target:*\n%s", alert.Target), false, false))
+				fmt.Sprintf("*🎯 Target*\n`%s`", alert.Target), false, false))
 	}
 
-	// Add status field
+	// State
 	fields = append(fields,
 		slack.NewTextBlockObject(slack.MarkdownType,
-			fmt.Sprintf("*Status:*\n%s", b.formatState(alert.State)), false, false))
+			fmt.Sprintf("*📊 State*\n%s", b.formatState(alert.State)), false, false))
+
+	// Fingerprint (shortened for display)
+	if alert.Fingerprint != "" {
+		fp := alert.Fingerprint
+		if len(fp) > 12 {
+			fp = fp[:12] + "..."
+		}
+		fields = append(fields,
+			slack.NewTextBlockObject(slack.MarkdownType,
+				fmt.Sprintf("*🔑 ID*\n`%s`", fp), false, false))
+	}
 
 	return slack.NewSectionBlock(nil, fields, nil)
 }
 
-// buildStatusContext creates the status context block.
-func (b *MessageBuilder) buildStatusContext(alert *entity.Alert) *slack.ContextBlock {
+// buildTimelineContext creates the timeline context with fired/acked/resolved times.
+func (b *MessageBuilder) buildTimelineContext(alert *entity.Alert) *slack.ContextBlock {
 	var elements []slack.MixedElement
 
 	// Fired time
 	firedAt := alert.FiredAt.Format("Jan 2, 15:04 MST")
 	elements = append(elements,
 		slack.NewTextBlockObject(slack.MarkdownType,
-			fmt.Sprintf("Fired: %s", firedAt), false, false))
+			fmt.Sprintf("🔥 Fired: *%s*", firedAt), false, false))
 
 	// Acknowledged info
 	if alert.IsAcked() && alert.AckedBy != "" {
@@ -125,7 +204,7 @@ func (b *MessageBuilder) buildStatusContext(alert *entity.Alert) *slack.ContextB
 		}
 		elements = append(elements,
 			slack.NewTextBlockObject(slack.MarkdownType,
-				fmt.Sprintf("Acked by %s at %s", alert.AckedBy, ackedAt), false, false))
+				fmt.Sprintf("  •  👁️ Acked by *%s* at %s", alert.AckedBy, ackedAt), false, false))
 	}
 
 	// Resolved info
@@ -133,92 +212,58 @@ func (b *MessageBuilder) buildStatusContext(alert *entity.Alert) *slack.ContextB
 		resolvedAt := alert.ResolvedAt.Format("15:04 MST")
 		elements = append(elements,
 			slack.NewTextBlockObject(slack.MarkdownType,
-				fmt.Sprintf("Resolved: %s", resolvedAt), false, false))
-	}
-
-	// Fingerprint (for tracking and debugging)
-	if alert.Fingerprint != "" {
-		elements = append(elements,
-			slack.NewTextBlockObject(slack.MarkdownType,
-				fmt.Sprintf("Fingerprint: %s", alert.Fingerprint), false, false))
+				fmt.Sprintf("  •  ✅ Resolved: *%s*", resolvedAt), false, false))
 	}
 
 	return slack.NewContextBlock("", elements...)
 }
 
 // buildActionButtons creates the interactive action buttons.
-func (b *MessageBuilder) buildActionButtons(alertID string) *slack.ActionBlock {
-	elements := []slack.BlockElement{
-		// Acknowledge button
-		slack.NewButtonBlockElement(
+func (b *MessageBuilder) buildActionButtons(alertID string, showAck, showSilence bool) *slack.ActionBlock {
+	var elements []slack.BlockElement
+
+	// Acknowledge button
+	if showAck {
+		ackBtn := slack.NewButtonBlockElement(
 			fmt.Sprintf("ack_%s", alertID),
 			alertID,
-			slack.NewTextBlockObject(slack.PlainTextType, "Acknowledge", true, false),
-		).WithStyle(slack.StylePrimary),
-
-		// Add Note button
-		slack.NewButtonBlockElement(
-			fmt.Sprintf("note_%s", alertID),
-			alertID,
-			slack.NewTextBlockObject(slack.PlainTextType, "Add Note", true, false),
-		),
+			slack.NewTextBlockObject(slack.PlainTextType, "✓ Acknowledge", true, false),
+		)
+		ackBtn.Style = slack.StylePrimary
+		elements = append(elements, ackBtn)
 	}
 
 	// Silence duration dropdown
-	options := make([]*slack.OptionBlockObject, len(b.silenceDurations))
-	for i, d := range b.silenceDurations {
-		options[i] = slack.NewOptionBlockObject(
-			d.String(),
-			slack.NewTextBlockObject(slack.PlainTextType, b.formatDuration(d), false, false),
-			nil,
+	if showSilence {
+		options := make([]*slack.OptionBlockObject, len(b.silenceDurations))
+		for i, d := range b.silenceDurations {
+			options[i] = slack.NewOptionBlockObject(
+				d.String(),
+				slack.NewTextBlockObject(slack.PlainTextType, fmt.Sprintf("🔕 %s", b.formatDuration(d)), false, false),
+				nil,
+			)
+		}
+
+		silenceSelect := slack.NewOptionsSelectBlockElement(
+			slack.OptTypeStatic,
+			slack.NewTextBlockObject(slack.PlainTextType, "🔕 Silence...", false, false),
+			fmt.Sprintf("silence_%s", alertID),
+			options...,
 		)
+		elements = append(elements, silenceSelect)
 	}
 
-	silenceSelect := slack.NewOptionsSelectBlockElement(
-		slack.OptTypeStatic,
-		slack.NewTextBlockObject(slack.PlainTextType, "Silence...", false, false),
-		fmt.Sprintf("silence_%s", alertID),
-		options...,
-	)
-	elements = append(elements, silenceSelect)
+	if len(elements) == 0 {
+		return nil
+	}
 
 	return slack.NewActionBlock(fmt.Sprintf("actions_%s", alertID), elements...)
-}
-
-// BuildAckedMessage creates a message for an acknowledged alert (buttons disabled).
-func (b *MessageBuilder) BuildAckedMessage(alert *entity.Alert) []slack.Block {
-	var blocks []slack.Block
-
-	// Header
-	headerText := b.buildHeader(alert)
-	blocks = append(blocks, slack.NewHeaderBlock(
-		slack.NewTextBlockObject(slack.PlainTextType, headerText, true, false),
-	))
-
-	// Details
-	blocks = append(blocks, b.buildDetailsSection(alert))
-
-	// Summary
-	if alert.Summary != "" {
-		blocks = append(blocks, slack.NewSectionBlock(
-			slack.NewTextBlockObject(slack.MarkdownType, alert.Summary, false, false),
-			nil, nil,
-		))
-	}
-
-	// Divider
-	blocks = append(blocks, slack.NewDividerBlock())
-
-	// Status context
-	blocks = append(blocks, b.buildStatusContext(alert))
-
-	return blocks
 }
 
 // formatDuration formats a duration for display.
 func (b *MessageBuilder) formatDuration(d time.Duration) string {
 	if d < time.Hour {
-		return fmt.Sprintf("%d minutes", int(d.Minutes()))
+		return fmt.Sprintf("%d min", int(d.Minutes()))
 	}
 	if d < 24*time.Hour {
 		hours := int(d.Hours())
@@ -240,18 +285,10 @@ func (b *MessageBuilder) formatState(state entity.AlertState) string {
 	case entity.StateActive:
 		return "🔴 Firing"
 	case entity.StateAcked:
-		return "👀 Acknowledged"
+		return "👁️ Acknowledged"
 	case entity.StateResolved:
-		return "🟢 Resolved"
+		return "✅ Resolved"
 	default:
 		return string(state)
 	}
-}
-
-// valueOrNA returns the value or "N/A" if empty.
-func (b *MessageBuilder) valueOrNA(value string) string {
-	if value == "" {
-		return "N/A"
-	}
-	return value
 }

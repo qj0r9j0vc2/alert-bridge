@@ -65,11 +65,16 @@ func (c *Client) UpdateMessage(ctx context.Context, messageID string, alert *ent
 	}
 
 	var blocks []slack.Block
-	if alert.IsActive() {
+	switch {
+	case alert.IsActive():
+		// Active alert: show both ack and silence buttons
 		blocks = c.messageBuilder.BuildAlertMessage(alert)
-	} else {
-		// For acked/resolved alerts, build without action buttons
+	case alert.IsAcked() && !alert.IsResolved():
+		// Acknowledged but not resolved: hide ack button, keep silence button
 		blocks = c.messageBuilder.BuildAckedMessage(alert)
+	default:
+		// Resolved: no action buttons
+		blocks = c.messageBuilder.BuildResolvedMessage(alert)
 	}
 
 	options := []slack.MsgOption{
