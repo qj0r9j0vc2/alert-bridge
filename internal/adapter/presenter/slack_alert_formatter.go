@@ -180,3 +180,137 @@ func (f *SlackAlertFormatter) joinDetails(details []string) string {
 	}
 	return result
 }
+
+// FormatAlertSummary formats an AlertSummary into Slack Block Kit blocks.
+// The periodDesc parameter describes the time period for the summary (e.g., "last 24 hour(s)").
+// Returns blocks ready to be included in a Slack message.
+func (f *SlackAlertFormatter) FormatAlertSummary(summary *entity.AlertSummary, periodDesc string) []slack.Block {
+	blocks := []slack.Block{}
+
+	// Header block with period
+	headerText := "Alert Summary Dashboard"
+	if periodDesc != "" && periodDesc != "all time" {
+		headerText = fmt.Sprintf("Alert Summary - %s", periodDesc)
+	}
+	blocks = append(blocks, slack.NewHeaderBlock(
+		slack.NewTextBlockObject(slack.PlainTextType, headerText, false, false),
+	))
+
+	// Overview section
+	overviewText := fmt.Sprintf("*Total Alerts:* %d", summary.TotalAlerts)
+	if periodDesc != "" {
+		overviewText += fmt.Sprintf(" (%s)", periodDesc)
+	}
+	blocks = append(blocks, slack.NewSectionBlock(
+		slack.NewTextBlockObject(slack.MarkdownType, overviewText, false, false),
+		nil, nil,
+	))
+
+	blocks = append(blocks, slack.NewDividerBlock())
+
+	// Severity breakdown section
+	severityText := "*Alerts by Severity:*\n"
+	severityText += fmt.Sprintf("[CRITICAL] %d\n", summary.CriticalCount())
+	severityText += fmt.Sprintf("[WARNING] %d\n", summary.WarningCount())
+	severityText += fmt.Sprintf("[INFO] %d", summary.InfoCount())
+
+	blocks = append(blocks, slack.NewSectionBlock(
+		slack.NewTextBlockObject(slack.MarkdownType, severityText, false, false),
+		nil, nil,
+	))
+
+	// State breakdown section
+	stateText := "*Alerts by State:*\n"
+	stateText += fmt.Sprintf("Active: %d\n", summary.ActiveCount())
+	stateText += fmt.Sprintf("Acknowledged: %d", summary.AcknowledgedCount())
+
+	blocks = append(blocks, slack.NewSectionBlock(
+		slack.NewTextBlockObject(slack.MarkdownType, stateText, false, false),
+		nil, nil,
+	))
+
+	blocks = append(blocks, slack.NewDividerBlock())
+
+	// Top instance section
+	if topInstance := summary.TopInstance(); topInstance != "" {
+		instanceText := fmt.Sprintf("*Instance with Most Alerts:*\n`%s` with %d alert(s)",
+			topInstance, summary.TopInstanceCount())
+		blocks = append(blocks, slack.NewSectionBlock(
+			slack.NewTextBlockObject(slack.MarkdownType, instanceText, false, false),
+			nil, nil,
+		))
+	}
+
+	// Top instances breakdown (top 5)
+	if len(summary.AlertsByInstance) > 0 {
+		instanceBreakdown := f.formatTopInstances(summary.AlertsByInstance, 5)
+		if instanceBreakdown != "" {
+			blocks = append(blocks, slack.NewSectionBlock(
+				slack.NewTextBlockObject(slack.MarkdownType, "*Top Instances:*\n"+instanceBreakdown, false, false),
+				nil, nil,
+			))
+		}
+	}
+
+	blocks = append(blocks, slack.NewDividerBlock())
+
+	// Top acknowledgers section
+	if len(summary.TopAcknowledgers) > 0 {
+		ackText := "*Top Acknowledgers:*\n"
+		for i, ack := range summary.TopAcknowledgers {
+			ackText += fmt.Sprintf("%d. %s: %d acknowledgment(s)\n", i+1, ack.UserName, ack.Count)
+		}
+		blocks = append(blocks, slack.NewSectionBlock(
+			slack.NewTextBlockObject(slack.MarkdownType, ackText, false, false),
+			nil, nil,
+		))
+	} else {
+		blocks = append(blocks, slack.NewSectionBlock(
+			slack.NewTextBlockObject(slack.MarkdownType, "*Top Acknowledgers:*\n_No acknowledgments recorded_", false, false),
+			nil, nil,
+		))
+	}
+
+	// Footer context
+	footerText := fmt.Sprintf("Summary generated: %s", time.Now().Format("Jan 02, 2006 at 3:04 PM"))
+	blocks = append(blocks, slack.NewContextBlock(
+		"",
+		slack.NewTextBlockObject(slack.MarkdownType, footerText, false, false),
+	))
+
+	return blocks
+}
+
+// formatTopInstances formats the top N instances by alert count.
+func (f *SlackAlertFormatter) formatTopInstances(instances map[string]int, limit int) string {
+	// Convert to slice for sorting
+	type instanceCount struct {
+		name  string
+		count int
+	}
+	sorted := make([]instanceCount, 0, len(instances))
+	for name, count := range instances {
+		sorted = append(sorted, instanceCount{name: name, count: count})
+	}
+
+	// Sort by count descending
+	for i := 0; i < len(sorted)-1; i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j].count > sorted[i].count {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	// Take top N
+	if len(sorted) > limit {
+		sorted = sorted[:limit]
+	}
+
+	// Format as string
+	result := ""
+	for i, ic := range sorted {
+		result += fmt.Sprintf("%d. `%s`: %d alert(s)\n", i+1, ic.name, ic.count)
+	}
+	return result
+}

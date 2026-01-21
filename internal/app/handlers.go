@@ -36,9 +36,13 @@ func (app *Application) initializeHandlers() error {
 		queryAlertStatusUC := slackUseCase.NewQueryAlertStatusUseCase(
 			app.alertRepo,
 		)
+		summarizeAlertsUC := slackUseCase.NewSummarizeAlertsUseCase(
+			app.alertRepo,
+		)
 
 		app.handlers.SlackCommands = handler.NewSlackCommandsHandler(
 			queryAlertStatusUC,
+			summarizeAlertsUC,
 			app.logger.Get(),
 		)
 
