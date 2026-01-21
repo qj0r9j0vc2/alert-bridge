@@ -16,6 +16,36 @@ import (
 	slackUseCase "github.com/qj0r9j0vc2/alert-bridge/internal/usecase/slack"
 )
 
+// SlackCommandInfo represents metadata for a slash command.
+type SlackCommandInfo struct {
+	Command          string `json:"command"`
+	Description      string `json:"description"`
+	UsageHint        string `json:"usage_hint"`
+	RequestURL       string `json:"request_url"`
+	ShouldEscape     bool   `json:"should_escape"`
+	AutocompleteHint string `json:"autocomplete_hint,omitempty"`
+}
+
+// slackCommands defines all available slash commands.
+var slackCommands = []SlackCommandInfo{
+	{
+		Command:          "/alert-status",
+		Description:      "Check current alert status",
+		UsageHint:        "[critical|warning|info]",
+		RequestURL:       "/webhook/slack/commands",
+		ShouldEscape:     false,
+		AutocompleteHint: "Filter alerts by severity level",
+	},
+	{
+		Command:          "/summary",
+		Description:      "Get alert summary statistics",
+		UsageHint:        "[1h|24h|7d|1w|today|week|all]",
+		RequestURL:       "/webhook/slack/commands",
+		ShouldEscape:     false,
+		AutocompleteHint: "Specify time period for summary",
+	},
+}
+
 // SlackCommandsHandler handles Slack slash command webhooks (HTTP Mode).
 type SlackCommandsHandler struct {
 	queryAlertStatus *slackUseCase.QueryAlertStatusUseCase
@@ -40,11 +70,33 @@ func NewSlackCommandsHandler(
 
 // ServeHTTP implements http.Handler interface.
 func (h *SlackCommandsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		h.HandleListCommands(w, r)
+	case http.MethodPost:
+		h.HandleSlashCommand(w, r)
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-	h.HandleSlashCommand(w, r)
+}
+
+// HandleListCommands handles GET /webhook/slack/commands requests.
+// Returns a JSON list of available slash commands with their metadata.
+func (h *SlackCommandsHandler) HandleListCommands(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	response := struct {
+		Commands []SlackCommandInfo `json:"commands"`
+		Total    int                `json:"total"`
+	}{
+		Commands: slackCommands,
+		Total:    len(slackCommands),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("failed to encode commands list", "error", err.Error())
+	}
 }
 
 // HandleSlashCommand handles POST /webhook/slack/commands requests.
