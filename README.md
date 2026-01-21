@@ -6,7 +6,9 @@ A unified alert management system that bridges Alertmanager with Slack and Pager
 
 - **Alert Processing**: Receive and process alerts from Alertmanager webhooks
 - **Slack CLI Integration**: Full Slack app integration with Socket Mode (local dev) and HTTP Mode (production)
-- **Slash Commands**: Query alert status directly from Slack with `/alert-status`
+- **Slash Commands**: Query alerts directly from Slack
+  - `/alert-status [severity]` - Check current alert status with optional severity filter
+  - `/summary [period]` - Get alert summary statistics (1h, 24h, 7d, today, week, all)
 - **Bidirectional Sync**: Synchronize acknowledgments between Slack and PagerDuty
   - **Slack → PagerDuty**: Acknowledge button in Slack updates PagerDuty incident
   - **PagerDuty → Slack**: Acknowledgment/resolution in PagerDuty updates Slack message
@@ -116,14 +118,14 @@ To enable bidirectional sync from PagerDuty to Slack:
 
 3. **Test webhook integration**:
    ```bash
-   # Create test alert
-   curl -X POST http://localhost:8080/api/v1/alerts -d '{"name":"test","severity":"critical"}'
+   # Send test alert via Alertmanager webhook format
+   curl -X POST http://localhost:8080/webhook/alertmanager \
+     -H "Content-Type: application/json" \
+     -d '{"alerts":[{"status":"firing","labels":{"alertname":"test","severity":"critical"},"annotations":{"summary":"Test alert"}}]}'
 
    # Acknowledge in PagerDuty web UI
    # Check alert-bridge logs for webhook reception
    ```
-
-For detailed setup instructions, see [specs/feat-pagerduty-slack-ack/quickstart.md](specs/feat-pagerduty-slack-ack/quickstart.md).
 
 #### Troubleshooting PagerDuty Webhooks
 

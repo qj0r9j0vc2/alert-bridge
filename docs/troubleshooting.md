@@ -294,7 +294,8 @@
    ```
 
 2. Check token scopes in Slack App settings:
-   - Required: `chat:write`, `chat:write.public`, `reactions:write`
+   - Required: `chat:write`, `chat:write.public`, `commands`, `reactions:write`
+   - `commands` scope is required for `/alert-status` and `/summary` slash commands
 
 3. Test token manually:
    ```bash
@@ -307,6 +308,70 @@
    ping slack.com
    curl -I https://slack.com/api/
    ```
+
+### Slack Slash Commands Not Working
+
+**Symptoms:**
+- `/alert-status` or `/summary` commands show "command not found"
+- Commands return errors
+- No response from commands
+
+**Solutions:**
+1. Verify commands are registered in Slack App settings:
+   - Command: `/alert-status`
+   - Request URL: `https://your-domain.com/webhook/slack/commands`
+
+   - Command: `/summary`
+   - Request URL: `https://your-domain.com/webhook/slack/commands`
+
+2. Check signing secret is correct:
+   ```yaml
+   slack:
+     signing_secret: your-signing-secret
+   ```
+
+3. Verify the `commands` scope is added to bot token
+
+4. Check logs for signature verification failures:
+   ```bash
+   grep -i "signature" /var/log/alert-bridge/app.log
+   ```
+
+5. Ensure request URL is publicly accessible
+
+### Slack Socket Mode Not Connecting
+
+**Symptoms:**
+- Socket Mode shows "connection closed"
+- No events received in local development
+- Error: "invalid_auth" for app token
+
+**Solutions:**
+1. Verify app token is correct (must start with `xapp-`):
+   ```yaml
+   slack:
+     socket_mode:
+       enabled: true
+       app_token: xapp-...  # Must start with xapp-
+   ```
+
+2. Check app token has `connections:write` scope
+
+3. Enable debug mode to see connection details:
+   ```yaml
+   slack:
+     socket_mode:
+       enabled: true
+       debug: true
+   ```
+
+4. Verify Socket Mode is enabled in Slack App settings:
+   - Navigate to Settings > Socket Mode
+   - Toggle "Enable Socket Mode" on
+
+5. Generate a new App-Level Token if needed:
+   - Navigate to Settings > Basic Information
+   - Under "App-Level Tokens", create token with `connections:write` scope
 
 ### Cannot Connect to PagerDuty
 
@@ -338,6 +403,74 @@
 4. Verify network connectivity:
    ```bash
    ping events.pagerduty.com
+   ```
+
+### PagerDuty Webhooks Not Received
+
+**Symptoms:**
+- Acknowledgments in PagerDuty don't update Slack
+- Error: "401 Unauthorized" in PagerDuty webhook logs
+- Webhook events not processed
+
+**Solutions:**
+1. Verify webhook secret matches PagerDuty configuration:
+   ```yaml
+   pagerduty:
+     webhook_secret: whsec_...  # Must match PagerDuty webhook settings
+   ```
+
+2. Check PagerDuty webhook configuration:
+   - Navigate to Integrations > Generic Webhooks (v3)
+   - Verify Destination URL: `https://your-domain.com/webhook/pagerduty`
+   - Ensure events subscribed: `incident.acknowledged`, `incident.resolved`
+
+3. Test webhook endpoint accessibility:
+   ```bash
+   curl -I https://your-domain.com/webhook/pagerduty
+   ```
+
+4. Check application logs for signature errors:
+   ```bash
+   grep -i "pagerduty.*signature\|unauthorized" /var/log/alert-bridge/app.log
+   ```
+
+5. Verify the alert was created by Alert-Bridge:
+   - External incidents (created directly in PagerDuty) won't update Slack
+   - Alert must have been created via Alertmanager webhook
+
+### Alertmanager Webhooks Rejected
+
+**Symptoms:**
+- Error: "401 Unauthorized" for Alertmanager webhooks
+- Alerts not processed despite Alertmanager sending them
+- Signature verification failures in logs
+
+**Solutions:**
+1. If webhook secret is configured, verify Alertmanager includes signature:
+   ```yaml
+   # Alert-Bridge config
+   alertmanager:
+     webhook_secret: your-shared-secret
+   ```
+
+2. Alertmanager doesn't natively support HMAC signatures. Options:
+   - Remove `webhook_secret` to disable authentication (run on private network)
+   - Use a reverse proxy (nginx, envoy) to add the signature header
+   - Deploy a webhook forwarder that adds signatures
+
+3. If using signature verification, ensure header format:
+   - Header: `X-Alertmanager-Signature: v1=<hex_hmac_sha256>`
+   - Signature is HMAC-SHA256 of the raw request body
+
+4. Check logs for specific errors:
+   ```bash
+   grep -i "alertmanager.*signature\|unauthorized" /var/log/alert-bridge/app.log
+   ```
+
+5. To disable authentication temporarily for testing:
+   ```yaml
+   alertmanager:
+     webhook_secret: ""  # Leave empty to disable
    ```
 
 ### Alerts Not Persisting
