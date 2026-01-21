@@ -13,6 +13,7 @@ on:
 jobs:
   validate-manifest:
     name: Validate Slack App Manifest
+    if: false  # Disabled - Slack workflows temporarily disabled
     runs-on: ubuntu-latest
 
     steps:
