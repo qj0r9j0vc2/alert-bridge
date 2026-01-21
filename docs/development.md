@@ -4,33 +4,50 @@
 
 ```
 alert-bridge/
-├── cmd/alert-bridge/          # Application entry point
-├── config/                    # Configuration files
+├── cmd/alert-bridge/          # Application entry point (main.go)
+├── config/                    # Configuration files (config.example.yaml)
 ├── docs/                      # Documentation
+├── k8s/                       # Kubernetes manifests
+├── scripts/                   # Build and deployment scripts
+├── test/                      # Test fixtures and integration tests
 ├── internal/
+│   ├── app/                  # Application bootstrap and dependency injection
+│   │   ├── app.go           # Application struct and lifecycle
+│   │   ├── bootstrap.go     # Initialization logic
+│   │   ├── config.go        # Config manager setup
+│   │   ├── storage.go       # Storage factory
+│   │   ├── clients.go       # External client setup
+│   │   ├── handlers.go      # Handler initialization
+│   │   └── usecases.go      # Use case wiring
 │   ├── adapter/              # HTTP handlers, DTOs, presenters
-│   │   ├── dto/             # Data transfer objects
+│   │   ├── dto/             # Data transfer objects (Alertmanager, Slack, PagerDuty)
 │   │   ├── handler/         # HTTP request handlers
-│   │   └── presenter/       # Response formatting
+│   │   │   └── middleware/  # Authentication and observability middleware
+│   │   └── presenter/       # Response formatting (Slack message blocks)
 │   ├── domain/               # Business entities and interfaces
-│   │   ├── entity/          # Core domain entities
-│   │   └── repository/      # Repository interfaces
+│   │   ├── entity/          # Core domain entities (Alert, AckEvent, SilenceMark, etc.)
+│   │   ├── repository/      # Repository interfaces
+│   │   ├── logger/          # Logger interface
+│   │   └── errors/          # Domain errors
 │   ├── infrastructure/       # External integrations
-│   │   ├── config/          # Configuration loading
+│   │   ├── config/          # Configuration loading and hot-reload
 │   │   ├── persistence/     # Storage implementations
 │   │   │   ├── memory/      # In-memory storage
-│   │   │   ├── sqlite/      # SQLite storage
-│   │   │   └── mysql/       # MySQL storage
-│   │   ├── slack/           # Slack client
+│   │   │   ├── sqlite/      # SQLite storage with migrations
+│   │   │   └── mysql/       # MySQL storage with migrations
+│   │   ├── slack/           # Slack client (Socket Mode and HTTP)
 │   │   ├── pagerduty/       # PagerDuty client
-│   │   └── server/          # HTTP server
+│   │   ├── server/          # HTTP server and router
+│   │   ├── observability/   # Metrics and telemetry
+│   │   └── resilience/      # Circuit breaker patterns
 │   └── usecase/             # Business logic
-│       ├── alert/           # Alert processing
-│       ├── ack/             # Acknowledgment sync
-│       ├── silence/         # Silence management
-│       ├── slack/           # Slack integration
-│       └── pagerduty/       # PagerDuty integration
-└── specs/                    # Feature specifications
+│       ├── alert/           # Alert processing use case
+│       ├── ack/             # Acknowledgment sync use case
+│       ├── slack/           # Slack command and interaction use cases
+│       └── pagerduty/       # PagerDuty webhook handling
+├── Dockerfile               # Container build
+├── Makefile                 # Build automation
+└── go.mod                   # Go module definition
 
 ```
 
@@ -95,24 +112,35 @@ go tool cover -html=coverage.out
 Alert Bridge follows Clean Architecture principles:
 
 1. **Domain Layer** (`internal/domain/`)
-   - Core business entities (`entity/`)
-   - Repository interfaces (`repository/`)
+   - Core business entities (`entity/`): Alert, AckEvent, SilenceMark, SlackCommand
+   - Repository interfaces (`repository/`): AlertRepository, AckEventRepository, SilenceRepository
    - No external dependencies
 
 2. **Use Case Layer** (`internal/usecase/`)
-   - Business logic
-   - Orchestrates domain entities
-   - Uses repository interfaces
+   - Business logic orchestrating domain entities
+   - `alert/` - ProcessAlertUseCase for handling incoming alerts
+   - `ack/` - SyncAckUseCase for acknowledgment synchronization
+   - `slack/` - QueryAlertStatusUseCase, SummarizeAlertsUseCase, HandleInteractionUseCase
+   - `pagerduty/` - HandleWebhookUseCase for PagerDuty events
 
 3. **Infrastructure Layer** (`internal/infrastructure/`)
-   - External integrations (Slack, PagerDuty)
-   - Persistence implementations
-   - Configuration loading
+   - External integrations (Slack, PagerDuty clients)
+   - Persistence implementations (memory, SQLite, MySQL)
+   - Configuration loading with hot-reload support
+   - Observability (metrics, telemetry)
+   - Resilience patterns (circuit breaker)
 
 4. **Adapter Layer** (`internal/adapter/`)
-   - HTTP handlers
-   - Request/response DTOs
-   - Response formatters
+   - HTTP handlers for webhooks and API endpoints
+   - DTOs for Alertmanager, Slack, and PagerDuty payloads
+   - Response formatters (Slack Block Kit)
+   - Middleware (authentication, logging, recovery)
+
+5. **Application Layer** (`internal/app/`)
+   - Dependency injection and wiring
+   - Application lifecycle management
+   - Storage factory pattern
+   - Client initialization
 
 ### Adding a New Feature
 

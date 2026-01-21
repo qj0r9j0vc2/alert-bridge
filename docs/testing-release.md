@@ -114,7 +114,7 @@ route:
 receivers:
   - name: 'alert-bridge'
     webhook_configs:
-      - url: 'http://alert-bridge:8080/api/v1/alerts'
+      - url: 'http://alert-bridge:8080/webhook/alertmanager'
         send_resolved: true
 ```
 
@@ -230,8 +230,9 @@ curl -X POST http://localhost:9093/api/v2/alerts \
 # Check alert-bridge logs
 docker-compose -f docker-compose.test.yaml logs -f alert-bridge
 
-# Verify alert was received
-curl http://localhost:8080/api/v1/alerts | jq
+# Verify alert-bridge is healthy and received the alert
+curl http://localhost:8080/health
+# Check logs for "alert processed" entries
 
 # Clean up
 docker-compose -f docker-compose.test.yaml down
