@@ -1,3 +1,4 @@
+# ⚠️ This repository is migrated to [altuslabsxyz/alert-bridge](https://github.com/altuslabsxyz/alert-bridge)
 # Alert Bridge
 
 A unified alert management system that bridges Alertmanager with Slack and PagerDuty, enabling bidirectional acknowledgment synchronization and persistent alert storage.
